@@ -78,6 +78,7 @@ public:
       return envelope * std::cos(phase);
       }
   }
+  using Superclass::Evaluate;
 
   itkSetMacro(Sigma, TRealValueType);
   itkGetConstMacro(Sigma, TRealValueType);

@@ -111,9 +111,6 @@ Neighborhood< TPixel, VDimension, TContainer >
   m_Size       ( other.m_Size ),
   m_DataBuffer ( other.m_DataBuffer )
 {
-  m_Radius     = other.m_Radius;
-  m_Size       = other.m_Size;
-  m_DataBuffer = other.m_DataBuffer;
   std::copy(other.m_StrideTable,
             other.m_StrideTable+VDimension,
             m_StrideTable);

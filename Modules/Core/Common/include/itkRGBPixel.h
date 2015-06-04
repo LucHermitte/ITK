@@ -104,6 +104,8 @@ public:
 
   const Self & operator-=(const Self & vec);
 
+  Self & operator*=(ComponentType const& s);
+
   Self operator *(const ComponentType & f) const;
 
   bool operator<(const Self & vec) const;

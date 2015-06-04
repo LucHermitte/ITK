@@ -97,18 +97,32 @@ public:
     return ( this->EvaluateAtContinuousIndex(index) );
   }
 
-  /** Interpolate the image at a continuous index position
+  /** \c Evaluate overload aimed at \c itk::VariableLengthVector.
+   */
+  virtual void EvaluateNoCopy(const PointType & point, OutputType & output, itk::ThreadIdType threadId) const ITK_OVERRIDE
+  {
+    ContinuousIndexType index;
+
+    this->GetInputImage()->TransformPhysicalPointToContinuousIndex(point, index);
+    this->EvaluateNoCopyAtContinuousIndex(index, output, threadId);
+  }
+
+#if 0
+  // No need to reassert its existence.
+  /** Interpolate the image at a continuous index position.
    *
    * Returns the interpolated image intensity at a
    * specified index position. No bounds checking is done.
-   * The point is assume to lie within the image buffer.
+   * \pre The point is assumed to lie within the image buffer.
    *
    * Subclasses must override this method.
    *
-   * ImageFunction::IsInsideBuffer() can be used to check bounds before
-   * calling the method. */
+   * \c ImageFunction::IsInsideBuffer() can be used to check bounds
+   * before calling the method.
+   */
   virtual OutputType EvaluateAtContinuousIndex(
-    const ContinuousIndexType & index) const ITK_OVERRIDE = 0;
+          const ContinuousIndexType & index) const ITK_OVERRIDE = 0;
+#endif
 
   /** Interpolate the image at an index position.
    *
@@ -126,8 +140,11 @@ public:
 protected:
   InterpolateImageFunction(){}
   ~InterpolateImageFunction(){}
+#if 0
+  // No need to do that. The default is good enough.
   void PrintSelf(std::ostream & os, Indent indent) const ITK_OVERRIDE
   { Superclass::PrintSelf(os, indent); }
+#endif
 
 private:
   InterpolateImageFunction(const Self &); //purposely not implemented

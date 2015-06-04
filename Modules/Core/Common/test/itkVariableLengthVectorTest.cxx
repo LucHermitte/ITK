@@ -57,22 +57,22 @@ int itkVariableLengthVectorTest(int, char*[])
     DoubleVariableLengthVectorType x( d, 3, false );
     if( (d[0] != 0.1) || (x[0] != 0.1) )
       {
-      std::cerr << "Memory management: [FAILED]" << std::endl;
+      std::cerr << "Memory management(1): [FAILED]" << std::endl;
       }
     std::cout << x << std::endl;
     x.SetSize( 5 , false);
     x[3] = 3.0;
     x[4] = 4.0;
-    std::cout << x << std::endl;
+    std::cout << d[0] << "->" << x << std::endl;
     if( (d[0] != 0.1) || (x[0] != 0.1) ) // increase length but preserve existing data
       {
-      std::cerr << "Memory management: [FAILED]" << std::endl;
+      std::cerr << "Memory management(2): [FAILED]" << std::endl;
       }
     x.SetSize( 2 , false); // reduce length but preserve existing data
     std::cout << x << std::endl;
     if( (x.GetSize() != 2) || (d[0] != 0.1) || (x[0] != 0.1) )
       {
-      std::cerr << "Memory management: [FAILED]" << std::endl;
+      std::cerr << "Memory management(3): [FAILED]" << std::endl;
       }
      x.SetSize( 5 , true); // increase size, destroy data.
      x.SetSize( 7 , true); // increase size, destroy data.

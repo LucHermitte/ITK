@@ -32,6 +32,59 @@
 
 namespace itk
 {
+/**\ingroup ITKCommon
+ * Generic function to cast a pixel into another pixel type.
+ * This function is aimed at writing efficient algorithms that cast pixel
+ * values. It is particularly important to not degrade performances on
+ * \c itk::VariableLentghVector based pixels.
+ *
+ * This overload is the default case. For numeric pixels, a simple \c
+ * static_cast<> should be enough.
+ * @tparam TDest Pixel type of the destination pixel
+ * @tparam TOrig Pixel type of the origin pixel
+ * @param[out] d TDestination pixel that shal receive the value of \c o
+ * @param[in]  o TOrigin pixel
+ *
+ * @throw Whatever a <tt>static_cast<TDest>(o)</tt> may throw.
+ *
+ * @post a copy is expected to be made. Hence, use this function to copy a
+ * pixel value that could be a proxy into another pixel variable. In other
+ * cases, \c itk::MoveInto() is to be prefered.
+ * @code
+ * RealType & value = m_cachedPixel[threadId];
+ * CastInto(value, inputImagePtr->GetPixel(index);
+ * @endcode
+ *
+ * \see <tt>itk::CastInto(VariableLengthVector<TDest>, VariableLengthVector<TOrig>)</tt>
+ * \todo Handle the case of \c itk::FixedArray<>
+ */
+template <typename TDest, typename TOrig>
+inline
+void CastInto(TDest & d, TOrig const& o)
+{ d = static_cast<TDest>(o); }
+
+/**\ingroup ITKCommon
+ * Generic function to convert a pixel into another pixel type.
+ * This function is aimed at writing efficient algorithms that move pixel
+ * values around. It is particularly important to not degrade performances on
+ * \c itk::VariableLentghVector based pixels.
+ *
+ * This overload is the default case. For numeric pixels, a simple \c
+ * static_cast<> should be enough.
+ * @tparam TDest Pixel type of the destination pixel
+ * @tparam TOrig Pixel type of the origin pixel
+ * @param[out] d TDestination pixel that shal receive the value of \c o
+ * @param[in]  o TOrigin pixel
+ *
+ * @throw Whatever a <tt>static_cast<TDest>(o)</tt> may throw.
+ * \see <tt>itk::MoveInto(VariableLengthVector<TDest>, VariableLengthVector<TOrig>)</tt>
+ * \see <tt>itk::MoveInto(VariableLengthVector<T>, VariableLengthVector<T>)</tt>
+ */
+template <typename TDest, typename TOrig>
+inline void
+MoveInto(TDest & d, TOrig const& o)
+{ d = static_cast<TDest>(o); }
+
 /** \class PixelTraits
  * \brief Traits for a pixel that define the dimension and component type.
  *

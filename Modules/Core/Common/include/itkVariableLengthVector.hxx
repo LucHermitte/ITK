@@ -21,7 +21,9 @@
 #include "itkNumericTraitsVariableLengthVectorPixel.h"
 #include "vnl/vnl_math.h"
 #include <cstring>
+  // MACCS 4.3 - optimization
 #include <cstdlib>
+#include <new>
 
 namespace itk
 {
@@ -71,11 +73,40 @@ VariableLengthVector< TValue >
   m_NumElements = v.Size();
   m_Data = this->AllocateElements(m_NumElements);
   m_LetArrayManageMemory = true;
-  for ( ElementIdentifier i = 0; i < v.Size(); i++ )
+  std::copy(&v.m_Data[0], &v.m_Data[m_NumElements], &this->m_Data[0]);
+}
+
+#if defined(ITK_USE_EXPRESSION_TEMPLATE)
+template< typename TValue >
+template <typename VLVExpr1, typename VLVExpr2, typename  TBinaryOp>
+VariableLengthVector< TValue >
+::VariableLengthVector(VLVExpr<VLVExpr1, VLVExpr2, TBinaryOp> const& rhs_)
+{
+    m_NumElements = rhs_.Size();
+    m_Data = this->AllocateElements(m_NumElements);
+    m_LetArrayManageMemory = true;
+    for ( ElementIdentifier i = 0; i < m_NumElements; ++i )
     {
-    this->m_Data[i] = v[i];
+        this->m_Data[i] = static_cast<TValue>(rhs_[i]);
     }
 }
+
+template< typename TValue >
+template <typename VLVExpr1, typename VLVExpr2, typename  TBinaryOp>
+VariableLengthVector< TValue > &
+VariableLengthVector< TValue >
+::operator=(VLVExpr<VLVExpr1, VLVExpr2, TBinaryOp> const& rhs_)
+{
+    ElementIdentifier const N = rhs_.Size();
+    this->SetSize( N, DontShrinkToFit(), DumpOldValues() );
+    for ( ElementIdentifier i = 0; i < N; ++i )
+    {
+        this->m_Data[i] = static_cast<TValue>(rhs_[i]);
+    }
+    return *this;
+}
+
+#endif
 
 /** Destructor */
 template< typename TValue >
@@ -125,22 +156,17 @@ template< typename TValue >
 TValue *VariableLengthVector< TValue >
 ::AllocateElements(ElementIdentifier size) const
 {
-  TValue *data;
-
   try
     {
-    data = new TValue[size];
+    return new TValue[size];
     }
-  catch ( ... )
+  catch (...)
     {
-    data = ITK_NULLPTR;
-    }
-  if ( !data )
-    {
+    // Intercept std::bad_alloc and any exception thrown from TValue
+    // default constructor.
     itkGenericExceptionMacro(<< "Failed to allocate memory of length " << size
                              << " for VariableLengthVector.");
     }
-  return data;
 }
 
 /** Set the pointer from which the data is imported.
@@ -195,66 +221,31 @@ void VariableLengthVector< TValue >
 ::DestroyExistingData()
 {
     // Free any existing data if we manage its memory.
-  if ( !m_LetArrayManageMemory )
-    {
-    m_Data = ITK_NULLPTR;
-    m_NumElements = 0;
-    return;
-    }
-
-  if ( m_Data )
-    {
-    if ( m_NumElements > 0 )
-      {
-      delete[] m_Data;
-      m_Data = ITK_NULLPTR;
-      m_NumElements = 0;
-      }
-    }
-}
-
-template< typename TValue >
-void VariableLengthVector< TValue >
-::SetSize(unsigned int sz, bool destroyExistingData)
-{
-  if ( destroyExistingData )
-    {
-    this->DestroyExistingData();
-    }
-
-  if ( !m_Data )
-    {
-    m_Data = this->AllocateElements(sz);
-    m_NumElements = sz;
-    m_LetArrayManageMemory = true;
-    return;
-    }
-
-  TValue *temp = this->AllocateElements(sz);
-
-  if ( sz > m_NumElements )
-    {
-    // only copy the portion of the data used in the old buffer
-    std::copy(m_Data,
-              m_Data+m_NumElements,
-              temp);
-    }
-  else
-    {
-    // only copy elements 0...size-1
-    std::copy(m_Data,
-              m_Data+sz,
-              temp);
-    }
-
   if ( m_LetArrayManageMemory )
     {
     delete[] m_Data;
     }
 
-  m_Data = temp;
-  m_LetArrayManageMemory = true;
-  m_NumElements = sz;
+  m_Data = ITK_NULLPTR;
+  m_NumElements = 0;
+}
+
+template< typename TValue >
+template <typename TReallocatePolicy, typename TKeepValuesPolicy>
+void VariableLengthVector< TValue >
+::SetSize(unsigned int sz, TReallocatePolicy reallocatePolicy, TKeepValuesPolicy keepValues)
+{
+    if (reallocatePolicy(sz, m_NumElements) || ! m_LetArrayManageMemory)
+    {
+        TValue * temp = this->AllocateElements(sz);
+        keepValues(sz, m_NumElements, m_Data, temp); // possible leak if TValue copy may throw
+        if (m_LetArrayManageMemory) {
+          delete[] m_Data;
+        }
+        m_Data = temp;
+        m_LetArrayManageMemory = true;
+    }
+    m_NumElements = sz;
 }
 
 /** Set the all the elements of the array to the specified value */
@@ -262,32 +253,40 @@ template< typename TValue >
 void VariableLengthVector< TValue >
 ::Fill(TValue const & v)
 {
-  for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
-    {
-    this->m_Data[i] = v;
-    }
+  std::fill_n(&this->m_Data[0], m_NumElements, v);
 }
 
 /** Assignment operator */
 template< typename TValue >
-const VariableLengthVector< TValue > &
+inline
+VariableLengthVector< TValue > &
 VariableLengthVector< TValue >
 ::operator=(const Self & v)
 {
-  if ( this != &v )
-    {
-    this->SetSize( v.Size() );
-    for ( ElementIdentifier i = 0; i < v.Size(); i++ )
-      {
-      this->m_Data[i] = v[i];
-      }
-    }
+  ElementIdentifier const N = v.Size();
+  this->SetSize( N, DontShrinkToFit(), DumpOldValues() );
+  std::copy(&v.m_Data[0], &v.m_Data[N], &this->m_Data[0]);
+
+  return *this;
+}
+
+/** Fast Assignment */
+template< typename TValue >
+inline
+VariableLengthVector< TValue > &
+VariableLengthVector< TValue >
+::FastAssign(const Self & v)
+{
+  ElementIdentifier const N = v.Size();
+  this->SetSize( N, NeverReallocate(), DumpOldValues() );
+  std::copy(&v.m_Data[0], &v.m_Data[N], &this->m_Data[0]);
+
   return *this;
 }
 
 /** Assignment operator */
 template< typename TValue >
-const VariableLengthVector< TValue > &
+VariableLengthVector< TValue > &
 VariableLengthVector< TValue >
 ::operator=(TValue const & v)
 {
@@ -373,6 +372,23 @@ VariableLengthVector< TValue >
     }
   return sum;
 }
+
+template <typename TExpr1, typename TExpr2, typename  TBinaryOp>
+typename VLVExpr<TExpr1, TExpr2, TBinaryOp>::RealValueType
+VLVExpr<TExpr1, TExpr2, TBinaryOp>
+::GetNorm() const
+{
+  return itk::GetNorm(*this);
+}
+
+template <typename TExpr1, typename TExpr2, typename  TBinaryOp>
+typename VLVExpr<TExpr1, TExpr2, TBinaryOp>::RealValueType
+VLVExpr<TExpr1, TExpr2, TBinaryOp>
+::GetSquaredNorm() const
+{
+  return itk::GetSquaredNorm(*this);
+}
+
 } // namespace itk
 
 #endif

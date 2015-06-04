@@ -18,10 +18,77 @@
 #ifndef itkVariableLengthVector_h
 #define itkVariableLengthVector_h
 
+#define ITK_USE_EXPRESSION_TEMPLATE
+
+#include <cassert>
 #include "itkNumericTraits.h"
+
+#if defined(ITK_USE_EXPRESSION_TEMPLATE)
+#  include "itkPromoteType.h"
+#  include "itkMPL.h"
+#endif
+
 
 namespace itk
 {
+  struct AlwaysReallocate {
+      bool operator()(unsigned int newSize, unsigned int oldSize) const
+      {
+          (void)newSize;
+          (void)oldSize;
+          return true;
+      }
+  };
+  struct NeverReallocate {
+      bool operator()(unsigned int newSize, unsigned int oldSize) const
+      {
+          (void)newSize;
+          (void)oldSize;
+          assert(newSize == oldSize && "SetSize is expected to never change the VariableLengthVector size...");
+          // A typical scenario would be:
+          // VariableLengthVector<...> v;
+          // v.SetSize(someFixedSize)
+          // for (pixel : image) {
+          //     assert(expression.size() == someFixedSize);
+          //     v.FastAssign( expression );
+          // }
+          return true;
+      }
+  };
+  struct ShrinkToFit {
+      bool operator()(unsigned int newSize, unsigned int oldSize) const
+      { return newSize != oldSize; }
+  };
+  struct DontShrinkToFit {
+      bool operator()(unsigned int newSize, unsigned int oldSize) const
+      { return newSize > oldSize; }
+  };
+
+  struct KeepOldValues {
+    template <typename TValue>
+      void operator()(unsigned int newSize, unsigned int oldSize, TValue * oldBuffer, TValue * newBuffer) const
+      {
+          const std::size_t nb = std::min(newSize, oldSize);
+          std::copy(oldBuffer, oldBuffer+nb, newBuffer);
+      }
+  };
+  struct DumpOldValues {
+    template <typename TValue>
+      void operator()(unsigned int newSize, unsigned int oldSize, TValue * oldBuffer, TValue * newBuffer) const
+      {
+          (void)oldSize;
+          (void)newSize;
+          (void)oldBuffer;
+          (void)newBuffer;
+      }
+  };
+
+
+#if defined(ITK_USE_EXPRESSION_TEMPLATE)
+    template <typename TExpr1, typename TExpr2, typename  TBinaryOp>
+        struct VLVExpr;
+#endif
+
 /** \class VariableLengthVector
  * \brief Represents an array whose length can be defined at run-time.
  *
@@ -126,7 +193,7 @@ public:
     m_NumElements = v.Size();
     m_Data = this->AllocateElements(m_NumElements);
     m_LetArrayManageMemory = true;
-    for ( ElementIdentifier i = 0; i < v.Size(); i++ )
+    for ( ElementIdentifier i = 0; i < m_NumElements; ++i )
       {
       this->m_Data[i] = static_cast< ValueType >( v[i] );
       }
@@ -136,21 +203,47 @@ public:
    * that the compiler provides */
   VariableLengthVector(const VariableLengthVector< TValue > & v);
 
+  /** Swaps two \c VariableLengthVector 's.
+   * \pre Expects none of the \c VariableLengthVector to act as a proxy,
+   * checked with assertions.
+   * \param[in,out] v  other \c VariableLengthVector to be swapped with.
+   * \throw None
+   */
+  void Swap(Self & v) {
+      assert(m_LetArrayManageMemory);
+      assert(v.m_LetArrayManageMemory);
+      using std::swap;
+      swap(v.m_Data       , m_Data);
+      swap(v.m_NumElements, m_NumElements);
+  }
+
+#if defined(ITK_USE_EXPRESSION_TEMPLATE)
+  template <typename TExpr1, typename TExpr2, typename  TBinaryOp>
+      VariableLengthVector(VLVExpr<TExpr1, TExpr2, TBinaryOp> const& rhs_);
+  template <typename TExpr1, typename TExpr2, typename  TBinaryOp>
+  Self & operator=(const VLVExpr<TExpr1, TExpr2, TBinaryOp> & v);
+#endif
+
   /** Set the all the elements of the array to the specified value */
   void Fill(TValue const & v);
 
-  /** Assignment operator  */
+  /** Assignment operator.
+   * Oddly enough when the VLV owns the memory, old elements are not copied
+   * ....
+   */
   template< typename T >
-  const VariableLengthVector< TValue > & operator=
-    (const VariableLengthVector< T > & v)
+  Self & operator=(const VariableLengthVector< T > & v)
   {
-    if ( m_Data == static_cast< void * >( const_cast< T * >
-                                          ( ( const_cast< VariableLengthVector< T > & >( v ) ).GetDataPointer() ) ) )
+#if 0
+      if ( m_Data == static_cast< void * >( const_cast< T * >
+                  ( ( const_cast< VariableLengthVector<T> & >( v ) ).GetDataPointer() ) ) )
       {
-      return *this;
+          return *this;
       }
-    this->SetSize( v.Size() );
-    for ( ElementIdentifier i = 0; i < v.Size(); i++ )
+#endif
+    ElementIdentifier const N = v.Size();
+    this->SetSize( N, DontShrinkToFit(), DumpOldValues() );
+    for ( ElementIdentifier i = 0; i < N; ++i )
       {
       this->m_Data[i] = static_cast< ValueType >( v[i] );
       }
@@ -158,16 +251,19 @@ public:
   }
 
   /** Assignment operators  */
-  const Self & operator=(const Self & v);
+  Self & operator=(const Self & v);
 
-  const Self & operator=(TValue const & v);
+  /** Fast Assignment */
+  Self & FastAssign(const Self & v);
+
+  Self & operator=(TValue const & v);
 
   /** Return the number of elements in the Array  */
   inline unsigned int Size(void) const { return m_NumElements; }
   inline unsigned int GetNumberOfElements(void) const { return m_NumElements; }
 
   /** Return reference to the element at specified index. No range checking. */
-  TValue       & operator[](unsigned int i) { return this->m_Data[i]; }
+  TValue       & operator[](unsigned int i)       { return this->m_Data[i]; }
   /** Return reference to the element at specified index. No range checking. */
   TValue const & operator[](unsigned int i) const { return this->m_Data[i]; }
 
@@ -176,6 +272,11 @@ public:
 
   /** Set one element */
   void SetElement(unsigned int i, const TValue & value) { m_Data[i] = value; }
+
+  template <typename TReallocatePolicy, typename TKeepValuesPolicy>
+  void SetSize(unsigned int sz,
+          TReallocatePolicy reallocatePolicy,
+          TKeepValuesPolicy keepValues);
 
   /** Set the size to that given.
    *
@@ -187,7 +288,16 @@ public:
    *    If \c true, the size is set destructively to the length given. If the
    * length is different from the current length, existing data will be lost.
    * The default is \c true. */
-  void SetSize(unsigned int sz, bool destroyExistingData = true);
+  void SetSize(unsigned int sz, bool destroyExistingData = true)
+  {
+      // Stays compatiable with previous code version
+      // And works around the fact template function can't have default
+      // arguments on template types.
+      if (destroyExistingData)
+          SetSize(sz, AlwaysReallocate(), KeepOldValues());
+      else
+          SetSize(sz, ShrinkToFit(), KeepOldValues());
+  }
 
   /** Destroy data that is allocated internally, if LetArrayManageMemory is
    * true. */
@@ -230,6 +340,7 @@ public:
 
   const TValue * GetDataPointer() const { return m_Data; }
 
+#if !defined(ITK_USE_EXPRESSION_TEMPLATE)
   /** Element-wise vector addition. The vectors do not have to have
    * the same element type. The input vector elements are cast to the
    * output vector element type before the addition is performed.
@@ -237,23 +348,18 @@ public:
    * \note For efficiency, the length of the vectors is not checked;
    * they are assumed to have the same length. */
   template< typename T >
-  inline Self operator+(const VariableLengthVector< T > & v) const
-  {
-    // if( m_NumElements != v.GetSize() )
-    //   {
-    //   itkGenericExceptionMacro( << "Cannot add VariableLengthVector of length
-    // "
-    //                             << m_NumElements " and " << v.GetSize() );
-    //   }
-    const ElementIdentifier length = v.Size();
-    Self                    result(length);
-
-    for ( ElementIdentifier i = 0; i < length; i++ )
+      inline Self operator+(const VariableLengthVector< T > & v) const
       {
-      result[i] = ( *this )[i] + static_cast< ValueType >( v[i] );
+          assert( m_NumElements == v.GetSize() );
+          const ElementIdentifier length = v.Size();
+          Self                    result(length);
+
+          for ( ElementIdentifier i = 0; i < length; i++ )
+          {
+              result[i] = ( *this )[i] + static_cast< ValueType >( v[i] );
+          }
+          return result;
       }
-    return result;
-  }
 
   /** Element-wise subtraction of vectors. The vectors do not have to
    * have the same element type. The input vector elements are cast to
@@ -265,12 +371,7 @@ public:
   template< typename T >
   inline Self operator-(const VariableLengthVector< T > & v) const
   {
-    // if( m_NumElements != v.GetSize() )
-    //   {
-    //   itkGenericExceptionMacro( << "Cannot add VariableLengthVector of length
-    // "
-    //                             << m_NumElements " and " << v.GetSize() );
-    //   }
+    assert( m_NumElements == v.GetSize() );
     const ElementIdentifier length = v.Size();
     Self                    result(length);
 
@@ -318,13 +419,13 @@ public:
   /** Add scalar 's' to each element of the vector.*/
   inline Self operator+(TValue s) const
   {
-    Self result(m_NumElements);
+      Self result(m_NumElements);
 
-    for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
+      for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
       {
-      result[i] = m_Data[i] + s;
+          result[i] = m_Data[i] + s;
       }
-    return result;
+      return result;
   }
 
   /** Subtract scalar 's' from each element of the vector.*/
@@ -338,6 +439,7 @@ public:
       }
     return result;
   }
+#endif
 
   /** Prefix operator that subtracts 1 from each element of the
    * vector. */
@@ -435,6 +537,18 @@ public:
     return *this;
   }
 
+#if defined(ITK_USE_EXPRESSION_TEMPLATE)
+  template <typename TExpr1, typename TExpr2, typename TBinaryOp>
+    Self& operator+=(VLVExpr<TExpr1,TExpr2,TBinaryOp> const& v)
+      {
+      for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
+        {
+        m_Data[i] += static_cast< ValueType >( v[i] );
+        }
+      return *this;
+      }
+#endif
+
   /** Multiply each element of the vector by a scalar 's'. The scalar
    * value is cast to the current vector element type prior to
    * multiplication. */
@@ -477,6 +591,8 @@ public:
   /** Returns vector's squared Euclidean Norm  */
   RealValueType GetSquaredNorm() const;
 
+  /** letArrayManageMemory getter. */
+  bool isAProxy() const { return ! m_LetArrayManageMemory;}
 private:
 
   bool              m_LetArrayManageMemory; // if true, the array is responsible
@@ -485,6 +601,7 @@ private:
   ElementIdentifier m_NumElements;
 };
 
+#if !defined(ITK_USE_EXPRESSION_TEMPLATE)
 /** Premultiply Operator for product of a VariableLengthVector and a scalar.
  *  VariableLengthVector< TValue >  =  T * VariableLengthVector< TValue >
  */
@@ -495,7 +612,7 @@ operator*(const T & scalar, const VariableLengthVector< TValue > & v)
 {
   return v.operator*(scalar);
 }
-
+#endif
 
 template< typename TValue >
 std::ostream & operator<<(std::ostream & os, const VariableLengthVector< TValue > & arr)
@@ -515,6 +632,250 @@ std::ostream & operator<<(std::ostream & os, const VariableLengthVector< TValue 
   os << "]";
   return os;
 }
+
+#if defined(ITK_USE_EXPRESSION_TEMPLATE)
+template <typename TExpr> struct get_type
+{
+    typedef TExpr Type;
+    static type load(type const& v, unsigned int idx)
+    { (void)idx; return v; }
+};
+template <typename TExpr1, typename TExpr2> struct get_size
+{
+    static unsigned int Size(TExpr1 const&, TExpr2 const& rhs_)
+    { return rhs_.Size(); }
+};
+template <typename TExpr1, typename TExpr2, typename TBinaryOp, typename  TRHS>
+struct get_size<VLVExpr<TExpr1, TExpr2, TBinaryOp>, TRHS>
+{
+    static unsigned int Size(VLVExpr<TExpr1, TExpr2, TBinaryOp> const& lhs_, TRHS const& )
+    { return lhs_.Size(); }
+};
+template <typename T, typename  TRHS>
+struct get_size<VariableLengthVector<T>, TRHS>
+{
+    static unsigned int Size(VariableLengthVector<T> const& lhs_, TRHS const& )
+    { return lhs_.Size(); }
+};
+
+template <typename TExpr1, typename TExpr2, typename  TBinaryOp>
+struct VLVExpr
+{
+    static const bool isVLV = true;
+
+    VLVExpr(TExpr1 const& lhs_, TExpr2 const& rhs_) : m_lhs(lhs_), m_rhs(rhs_){}
+    // TODO: detect constants to avoid computing sizes...
+    unsigned int Size() const { return get_size<TExpr1, TExpr2>::Size(m_lhs, m_rhs); }
+
+    typedef typename  PromoteType<
+        typename get_type<TExpr1>::Type,
+        typename get_type<TExpr2>::Type        >::type  ResType;
+    typedef typename NumericTraits< ResType >::RealType RealValueType;
+
+    ResType operator[](unsigned int idx) const {
+        return TBinaryOp::apply(
+                get_type<TExpr1>::load(m_lhs, idx),
+                get_type<TExpr2>::load(m_rhs, idx));
+    }
+
+    /** Returns vector's Euclidean Norm  */
+    RealValueType GetNorm() const;
+
+    /** Returns vector's squared Euclidean Norm  */
+    RealValueType GetSquaredNorm() const;
+
+private:
+    TExpr1 const& m_lhs;
+    TExpr2 const& m_rhs;
+};
+
+template <typename T>
+struct get_type<VariableLengthVector<T> >
+{
+    typedef T Type;
+    static type load(VariableLengthVector<T>  const& v, unsigned int idx)
+    { return v[idx]; }
+};
+template <typename TExpr1, typename TExpr2, typename TBinaryOp>
+struct get_type<VLVExpr<TExpr1, TExpr2, TBinaryOp> >
+{
+    typedef typename VLVExpr<TExpr1, TExpr2, TBinaryOp>::ResType Type;
+    static type load(VLVExpr<TExpr1, TExpr2, TBinaryOp> const& v, unsigned int idx)
+    { return v[idx]; }
+};
+
+namespace op {
+    struct plus  {
+        template <typename T1, typename T2>
+            static
+            typename PromoteType<T1, T2>::type apply(T1 const& lhs_, T2 const& rhs_)
+            { return lhs_ + rhs_; }
+    };
+
+    struct sub  {
+        template <typename T1, typename T2>
+            static
+            typename PromoteType<T1, T2>::type apply(T1 const& lhs_, T2 const& rhs_)
+            { return lhs_ - rhs_; }
+    };
+
+    struct mult  {
+        template <typename T1, typename T2>
+            static
+            typename PromoteType<T1, T2>::type apply(T1 const& lhs_, T2 const& rhs_)
+            { return lhs_ * rhs_; }
+    };
+
+    struct div  {
+        template <typename T1, typename T2>
+            static
+            typename PromoteType<T1, T2>::type apply(T1 const& lhs_, T2 const& rhs_)
+            { return lhs_ / rhs_; }
+    };
+} // op namespace
+
+#if 1
+template <typename T>
+struct is_VLV : false_type {};
+
+template <typename T>
+struct is_VLV<itk::VariableLengthVector<T> > : true_type {};
+
+template <typename TExpr1, typename TExpr2, typename TBinaryOp>
+struct is_VLV<VLVExpr<TExpr1, TExpr2,TBinaryOp> > : true_type {};
+#endif
+
+template <typename TExpr1, typename TExpr2>
+inline
+typename enable_if<mpl::or_<is_VLV<TExpr1>, is_VLV<TExpr2> > , VLVExpr<TExpr1, TExpr2, op::plus> >::type
+operator+(TExpr1 const& lhs_, TExpr2 const& rhs_)
+{ return VLVExpr<TExpr1, TExpr2, op::plus>(lhs_, rhs_); }
+
+template <typename TExpr1, typename TExpr2>
+inline
+typename enable_if<mpl::or_<is_VLV<TExpr1>, is_VLV<TExpr2> > , VLVExpr<TExpr1, TExpr2, op::sub> >::type
+operator-(TExpr1 const& lhs_, TExpr2 const& rhs_)
+{ return VLVExpr<TExpr1, TExpr2, op::sub>(lhs_, rhs_); }
+
+template <typename TExpr1, typename TExpr2>
+inline
+typename enable_if<mpl::xor_<is_VLV<TExpr1>, is_VLV<TExpr2> > , VLVExpr<TExpr1, TExpr2, op::mult> >::type
+operator*(TExpr1 const& lhs_, TExpr2 const& rhs_)
+{ return VLVExpr<TExpr1, TExpr2, op::mult>(lhs_, rhs_); }
+
+template <typename TExpr1, typename TExpr2>
+inline
+typename enable_if<mpl::and_<is_VLV<TExpr1>, mpl::not_<is_VLV<TExpr2> > > , VLVExpr<TExpr1, TExpr2, op::div> >::type
+operator/(TExpr1 const& lhs_, TExpr2 const& rhs_)
+{ return VLVExpr<TExpr1, TExpr2, op::div>(lhs_, rhs_); }
+
+template <typename TExpr1, typename TExpr2, typename  TBinaryOp>
+std::ostream & operator<<(std::ostream &os, VLVExpr<TExpr1, TExpr2, TBinaryOp> const& v)
+{
+    os << "[";
+    if (v.Size() != 0) {
+        os << v[0];
+        for (unsigned int i = 1, N = v.Size(); i != N; ++i) {
+            os << ", " << v[i];
+        }
+    }
+    return os << "]";
+}
+
+template <typename TExpr>
+inline
+typename enable_if<is_VLV<TExpr>, typename TExpr::RealValueType>::type
+GetNorm(TExpr const& v)
+{ return static_cast<typename TExpr::RealValueType>(std::sqrt(static_cast<double>(GetSquaredNorm(v)))); }
+
+template <typename TExpr>
+inline
+typename enable_if<is_VLV<TExpr>, typename TExpr::RealValueType>::type
+GetSquaredNorm(TExpr const& v)
+{
+  typedef typename TExpr::RealValueType RealValueType;
+  RealValueType sum = 0.0;
+  for ( unsigned int i = 0, N=v.Size(); i < N; ++i )
+    {
+    const RealValueType value = v[i];
+    sum += value * value;
+    }
+  return sum;
+}
+#endif
+
+template <typename T>
+void swap(VariableLengthVector<T> &l_, VariableLengthVector<T> &r_)
+{ l_.Swap(r_); }
+
+// MACCS 4.3 - optimization
+// aim: avoid a static cast that generates a new VLV
+template <typename TDest, typename TOrig>
+inline
+void CastInto(VariableLengthVector<TDest> & d, VariableLengthVector<TOrig> const& o)
+{ d = o; }
+
+/**
+ * Specialized function to convert a vector pixel into another vector pixel type.
+ * This function is aimed at writing efficient algorithms that move pixel
+ * values around. It is particularly important to not degrade performances on
+ * \c itk::VariableLentghVector based pixels.
+ *
+ * While this overload does not really move (the internals of) \c o into \d
+ * (as C++11 rvalue-references would permit), it will nonetheless avoid
+ * allocating memory for a new \c VariableLentghVector, thing that would have
+ * been a consequence of a \c static_cast<>.
+ *
+ * Instead, this overload will use the conversion assignment operator from \c
+ * VariableLentghVector to copy (and convert on-the-fly) the value from \c o.
+
+ * @tparam TDest Internal pixel type of the destination pixel
+ * @tparam TOrig Internal pixel type of the origin pixel
+ * @param[out] d Destination pixel that shal receive the value of \c o
+ * @param[in]  o Origin pixel
+ * @pre \c d shall not be a \c VariableLentghVector that acts as a proxy.
+ *
+ * @throw None
+ * \see <tt>itk::MoveInto(TDest, TOrig)</tt>
+ * \see <tt>itk::MoveInto(VariableLengthVector<T>, VariableLengthVector<T>)</tt>
+ * \ingroup DataRepresentation
+ * \ingroup ITKCommon
+ */
+template <typename TDest, typename TOrig>
+inline
+void MoveInto(VariableLengthVector<TDest> & d, VariableLengthVector<TOrig> const& o)
+{ d = o; }
+
+// MACCS 4.3 - optimization
+/**
+ * Specialized function to move a vector pixel into another vector pixel.
+ * This function is aimed at writing efficient algorithms that move pixel
+ * values around. It is particularly important to not degrade performances on
+ * \c itk::VariableLentghVector based pixels.
+ *
+ * Unlike the other overload that works on \c VariableLentghVector, this one
+ * will move the content of \c o into \d. As we don't care about old \c o
+ * content. Morevover in order to avoid the endless allocate-free cycles, the
+ * old content of \c o is moved into \c d. In other word, \c o and \c d
+ * contents are swapped.
+ *
+ * @tparam TDest Internal pixel type of the destination pixel
+ * @tparam TOrig Internal pixel type of the origin pixel
+ * @param[in,out] d Destination pixel that shal receive the value of \c o
+ * @param[in,out] o Origin pixel, that will received old \c d value.
+ * @pre Neither \c d nor \c o shall not be \c VariableLentghVector s that act as proxy.
+ *
+ * @throw None
+ * \see <tt>itk::MoveInto(VariableLengthVector<TDest>, VariableLengthVector<TOrig>)</tt>
+ * \see <tt>itk::MoveInto(TDest, TOrig)</tt>
+ * \ingroup DataRepresentation
+ * \ingroup ITKCommon
+ */
+template <typename T>
+inline
+void MoveInto(VariableLengthVector<T> & d, VariableLengthVector<T> & o)
+{ swap(d, o); }
+
 } // namespace itk
 
 #include "itkNumericTraitsVariableLengthVectorPixel.h"

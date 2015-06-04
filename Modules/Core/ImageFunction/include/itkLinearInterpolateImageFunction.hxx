@@ -82,7 +82,7 @@ LinearInterpolateImageFunction< TInputImage, TCoordRep >
     distance[dim] = index[dim] - static_cast< InternalComputationType >( baseIndex[dim] );
     }
 
-  /**
+  /*
    * Interpolated value is the weighted sum of each of the surrounding
    * neighbors. The weight for each neighbor is the fraction overlap
    * of the neighbor pixel with respect to a pixel centered on point.
@@ -136,6 +136,88 @@ LinearInterpolateImageFunction< TInputImage, TCoordRep >
     }
 
   return ( static_cast< OutputType >( value ) );
+}
+
+template< typename TInputImage, typename TCoordRep >
+void
+LinearInterpolateImageFunction< TInputImage, TCoordRep >
+::EvaluateUnoptimized(
+        const ContinuousIndexType & index,
+        typename LinearInterpolateImageFunction< TInputImage, TCoordRep >::OutputType & output,
+        itk::ThreadIdType threadId) const
+{
+  // Avoid the smartpointer de-reference in the loop for
+  // "return m_InputImage.GetPointer()"
+  const TInputImage * const inputImagePtr = this->GetInputImage();
+  /**
+   * Compute base index = closet index below point
+   * Compute distance from point to base index
+   */
+  IndexType baseIndex;
+  InternalComputationType    distance[ImageDimension];
+  for ( unsigned int dim = 0; dim < ImageDimension; ++dim )
+    {
+    baseIndex[dim] = Math::Floor< IndexValueType >(index[dim]);
+    distance[dim] = index[dim] - static_cast< InternalComputationType >( baseIndex[dim] );
+    }
+
+  /*
+   * Interpolated value is the weighted sum of each of the surrounding
+   * neighbors. The weight for each neighbor is the fraction overlap
+   * of the neighbor pixel with respect to a pixel centered on point.
+   */
+  // When RealType is VariableLengthVector, 'value' will be resized properly
+  // below when it's assigned again.
+  Concept::Detail::UniqueType< typename NumericTraits< RealType >::ScalarRealType >();
+
+  RealType & val = m_Val00[threadId];
+  // Initialize variable "val" with overloaded function so that
+  // in the case of variable length vectors the "val" is initialized
+  // to all zeros of length equal to the InputImagePtr first pixel length.
+  this->MakeZeroInitializer( inputImagePtr, val );
+
+  Concept::Detail::UniqueType< typename NumericTraits< InputPixelType >::ScalarRealType >();
+
+  for ( unsigned int counter = 0; counter < m_Neighbors; ++counter )
+    {
+    InternalComputationType overlap = 1.0;    // fraction overlap
+    unsigned int upper = counter;  // each bit indicates upper/lower neighbour
+    IndexType    neighIndex( baseIndex );
+
+    // get neighbor index and overlap fraction
+    for ( unsigned int dim = 0; dim < ImageDimension; ++dim )
+      {
+      if ( upper & 1 )
+        {
+        ++(neighIndex[dim]);
+        // Take care of the case where the pixel is just
+        // in the outer upper boundary of the image grid.
+        if ( neighIndex[dim] > this->m_EndIndex[dim] )
+          {
+          neighIndex[dim] = this->m_EndIndex[dim];
+          }
+        overlap *= distance[dim];
+        }
+      else
+        {
+        // Take care of the case where the pixel is just
+        // in the outer lower boundary of the image grid.
+        if ( neighIndex[dim] < this->m_StartIndex[dim] )
+          {
+          neighIndex[dim] = this->m_StartIndex[dim];
+          }
+        overlap *= 1.0 - distance[dim];
+        }
+
+      upper >>= 1;
+      }
+    RealType & val1 = m_Val01[threadId];
+    CastInto(val1, inputImagePtr->GetPixel(neighIndex));
+    val1 *= overlap;
+    val += val1;
+    }
+
+  MoveInto(output, val);
 }
 } // end namespace itk
 

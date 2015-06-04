@@ -113,18 +113,53 @@ public:
   const InputImageType * GetInputImage() const
   { return m_Image.GetPointer(); }
 
+#if 0
+  // No need to reassert its existence.
   /** Evaluate the function at specified Point position.
    * Subclasses must provide this method. */
   virtual TOutput Evaluate(const PointType & point) const ITK_OVERRIDE = 0;
+#endif
 
   /** Evaluate the function at specified Index position.
    * Subclasses must provide this method. */
   virtual TOutput EvaluateAtIndex(const IndexType & index) const = 0;
 
+  /** \c EvaluateAtIndex overload aimed at \c itk::VariableLengthVector.
+   * The default implementation is there to prepare smoothly the
+   * convertion from the \c EvaluateAtIndex overload which is
+   * inefficient with \c itk::VariableLengthVector to the efficient
+   * overload.
+   */
+  virtual void EvaluateNoCopyAtIndex(
+    const IndexType & index, OutputType & output, itk::ThreadIdType threadId) const
+  {
+      (void)threadId;
+      output = EvaluateAtIndex(index);
+  }
   /** Evaluate the function at specified ContinuousIndex position.
-   * Subclasses must provide this method. */
+   * Subclasses must provide this method.
+   * \return the interpolated image intensity at a
+   * specified index position. No bounds checking is done.
+   *
+   * \pre The point is assumed to lie within the image buffer.
+   * \c ImageFunction::IsInsideBuffer() can be used to check bounds
+   * before calling the method.
+   */
   virtual TOutput EvaluateAtContinuousIndex(
     const ContinuousIndexType & index) const = 0;
+
+  /** \c EvaluateAtContinuousIndex overload aimed at \c itk::VariableLengthVector.
+   * The default implementation is there to prepare smoothly the
+   * convertion from the \c EvaluateAtContinuousIndex overload which is
+   * inefficient with \c itk::VariableLengthVector to the efficient
+   * overload.
+   */
+  virtual void EvaluateNoCopyAtContinuousIndex(
+    const ContinuousIndexType & index, OutputType & output, itk::ThreadIdType threadId) const
+  {
+      (void) threadId;
+      output = EvaluateAtContinuousIndex(index);
+  }
 
   /** Check if an index is inside the image buffer.
    * We take into account the fact that each voxel has its

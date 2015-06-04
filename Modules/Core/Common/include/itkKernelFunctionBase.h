@@ -54,8 +54,11 @@ public:
   /** Run-time type information (and related methods). */
   itkTypeMacro(KernelFunctionBase, FunctionBase);
 
+#if 0
+  // Generates a warning now
   /** Evaluate the function. Subclasses must implement this. */
   virtual TRealValueType Evaluate(const TRealValueType & u) const ITK_OVERRIDE = 0;
+#endif
 
 #ifdef ITK_USE_STRICT_CONCEPT_CHECKING
     // Begin concept checking

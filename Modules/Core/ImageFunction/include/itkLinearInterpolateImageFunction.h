@@ -21,6 +21,11 @@
 #include "itkInterpolateImageFunction.h"
 #include "itkVariableLengthVector.h"
 
+// MACCS 4.3 - optimization
+// The whole file has experienced aggressive optimization
+// - Dispatch<3> has been disabled momentarilly
+// - This ImageFunction cannot be used from filter other than the patched
+// otbWarpImageFilter anymore
 namespace itk
 {
 /** \class LinearInterpolateImageFunction
@@ -84,19 +89,34 @@ public:
   typedef typename Superclass::ContinuousIndexType ContinuousIndexType;
   typedef typename ContinuousIndexType::ValueType  InternalComputationType;
 
-  /** Evaluate the function at a ContinuousIndex position
+  /** Evaluates the function at a \c ContinuousIndex position
    *
    * Returns the linearly interpolated image intensity at a
    * specified point position. No bounds checking is done.
-   * The point is assume to lie within the image buffer.
+   * \pre The point is assumed to lie within the image buffer.
    *
-   * ImageFunction::IsInsideBuffer() can be used to check bounds before
+   * \c ImageFunction::IsInsideBuffer() can be used to check bounds before
    * calling the method. */
   virtual inline OutputType EvaluateAtContinuousIndex(const
                                                       ContinuousIndexType &
                                                       index) const ITK_OVERRIDE
   {
     return this->EvaluateOptimized(Dispatch< ImageDimension >(), index);
+  }
+
+  virtual void EvaluateAtContinuousIndex(
+    const ContinuousIndexType & index, OutputType & output, itk::ThreadIdType threadId) const ITK_OVERRIDE
+  {
+    this->EvaluateOptimized(Dispatch< ImageDimension >(), index, output, threadId);
+  }
+
+  virtual void notifyNbThreads(itk::ThreadIdType threadId) ITK_OVERRIDE
+  {
+      m_Val00.resize(threadId);
+      m_Val01.resize(threadId);
+      m_Val10.resize(threadId);
+      m_Valx0.resize(threadId);
+      m_Valx1.resize(threadId);
   }
 
 protected:
@@ -119,6 +139,11 @@ private:
                                       const ContinuousIndexType & ) const
   {
     return 0;
+  }
+
+  void EvaluateOptimized(const Dispatch< 0 > &, const ContinuousIndexType &, OutputType & output, itk::ThreadIdType threadId) const
+  {
+      output = 0;
   }
 
   inline OutputType EvaluateOptimized(const Dispatch< 1 > &,
@@ -148,6 +173,43 @@ private:
     const RealType & val1 = inputImagePtr->GetPixel(basei);
 
     return ( static_cast< OutputType >( val0 + ( val1 - val0 ) * distance ) );
+  }
+
+  void EvaluateOptimized(const Dispatch< 1 > &, const ContinuousIndexType & index, OutputType & output, itk::ThreadIdType threadId) const
+  {
+    IndexType basei;
+    basei[0] = Math::Floor< IndexValueType >(index[0]);
+    if ( basei[0] < this->m_StartIndex[0] )
+      {
+      basei[0] = this->m_StartIndex[0];
+      }
+
+    const InternalComputationType & distance = index[0] - static_cast< InternalComputationType >( basei[0] );
+
+    const TInputImage * const inputImagePtr = this->GetInputImage();
+    if ( distance <= 0. )
+      {
+      // Cannot use MoveInto as GetPixel result is likelly a proxy
+      CastInto(output, inputImagePtr->GetPixel(basei));
+      return;
+      }
+
+    RealType & val0 = m_Val00[threadId];
+    CastInto(val0, inputImagePtr->GetPixel(basei));
+
+    ++basei[0];
+    if ( basei[0] > this->m_EndIndex[0] )
+      {
+      MoveInto(output, val0);
+      return;
+      }
+    RealType & val1 = m_Val01[threadId];
+    CastInto(val1, inputImagePtr->GetPixel(basei));
+
+    val1 -= val0;
+    val1 *= distance;
+    val1 += val0;
+    MoveInto(output, val1);
   }
 
   inline OutputType EvaluateOptimized(const Dispatch< 2 > &,
@@ -226,6 +288,224 @@ private:
 
     return ( static_cast< OutputType >( valx0 + ( valx1 - valx0 ) * distance1 ) );
   }
+
+#if 0 && defined(ITK_USE_EXPRESSION_TEMPLATE)
+  void EvaluateOptimized(const Dispatch< 2 > &, const ContinuousIndexType & index, OutputType & output, itk::ThreadIdType threadId) const
+  {
+    IndexType basei;
+
+    basei[0] = Math::Floor< IndexValueType >(index[0]);
+    if ( basei[0] < this->m_StartIndex[0] )
+      {
+      basei[0] = this->m_StartIndex[0];
+      }
+    const InternalComputationType & distance0 = index[0] - static_cast< InternalComputationType >( basei[0] );
+
+    basei[1] = Math::Floor< IndexValueType >(index[1]);
+    if ( basei[1] < this->m_StartIndex[1] )
+      {
+      basei[1] = this->m_StartIndex[1];
+      }
+    const InternalComputationType & distance1 = index[1] - static_cast< InternalComputationType >( basei[1] );
+
+    const TInputImage * const inputImagePtr = this->GetInputImage();
+    InputPixelType const& val00 =  inputImagePtr->GetPixel(basei);
+
+    if ( distance0 <= 0. && distance1 <= 0. )
+      {
+      MoveInto(output, val00); // This does cast directly fro input to output type...
+      return;
+      }
+    else if ( distance1 <= 0. ) // if they have the same "y"
+      {
+      ++basei[0];  // then interpolate across "x"
+      if ( basei[0] > this->m_EndIndex[0] )
+        {
+        MoveInto(output, val00); // This does cast directly fro input to output type...
+        return;
+        }
+      InputPixelType const& val10 =  inputImagePtr->GetPixel(basei);
+      // No need to compute val10 - val00 in RealType space, InputType
+      // should support arithmetics, but not necessarily difference
+      // between positive short integers.
+      // => We will cast into RealType
+      MoveInto(output, val00 + ( As<RealType>(val10) - val00 ) * distance0);
+      return;
+      // return ( static_cast< OutputType >( val00 + ( val10 - val00 ) * distance0 ) );
+      }
+    else if ( distance0 <= 0. ) // if they have the same "x"
+      {
+      ++basei[1];  // then interpolate across "y"
+      if ( basei[1] > this->m_EndIndex[1] )
+        {
+        MoveInto(output, val00);
+        return;
+        }
+      // return ( static_cast< OutputType >( val00 + ( val01 - val00 ) * distance1 ) );
+      InputPixelType const& val01 =  inputImagePtr->GetPixel(basei);
+      MoveInto(output, val00 + ( As<RealType>(val01) - val00 ) * distance1);
+      return;
+      }
+    // fall-through case:
+    // interpolate across "xy"
+    ++basei[0];
+    if ( basei[0] > this->m_EndIndex[0] ) // interpolate across "y"
+      {
+      --basei[0];
+      ++basei[1];
+      if ( basei[1] > this->m_EndIndex[1] )
+        {
+        MoveInto(output, val00);
+        return;
+        }
+      // const RealType & val01 = inputImagePtr->GetPixel(basei);
+      // return ( static_cast< OutputType >( val00 + ( val01 - val00 ) * distance1 ) );
+      InputPixelType const& val01 =  inputImagePtr->GetPixel(basei);
+      MoveInto(output, val00 + ( As<RealType>(val01) - val00 ) * distance1);
+      return;
+      }
+    // const RealType & val10 = inputImagePtr->GetPixel(basei);
+    InputPixelType const& val10 =  inputImagePtr->GetPixel(basei);
+
+    // const RealType & valx0 = val00 + ( val10 - val00 ) * distance0;
+    // Storing this variable in a cache is the best that can be done.
+    auto valx0 = val00 + ( As<RealType>(val10) - val00 ) * distance0;
+
+    ++basei[1];
+    if ( basei[1] > this->m_EndIndex[1] ) // interpolate across "x"
+      {
+      MoveInto(output, valx0);
+      // MoveInto(output, val00 + ( As<RealType>(val10) - val00 ) * distance0);
+      return;
+      }
+    // const RealType & val11 = inputImagePtr->GetPixel(basei);
+    InputPixelType const& val11 =  inputImagePtr->GetPixel(basei);
+
+    --basei[0];
+    InputPixelType const& val01 = inputImagePtr->GetPixel(basei);
+
+    // const RealType & valx1 = val01 + ( val11 - val01 ) * distance0;
+    // return ( static_cast< OutputType >( valx0 + ( valx1 - valx0 ) * distance1 ) );
+    MoveInto(output,  valx0 + ( val01 + ( As<RealType>(val11) - val01 ) * distance0 - valx0 ) * distance1);
+  }
+#else
+  void EvaluateOptimized(const Dispatch< 2 > &, const ContinuousIndexType & index, OutputType & output, itk::ThreadIdType threadId) const
+  {
+    IndexType basei;
+
+    basei[0] = Math::Floor< IndexValueType >(index[0]);
+    if ( basei[0] < this->m_StartIndex[0] )
+      {
+      basei[0] = this->m_StartIndex[0];
+      }
+    const InternalComputationType & distance0 = index[0] - static_cast< InternalComputationType >( basei[0] );
+
+    basei[1] = Math::Floor< IndexValueType >(index[1]);
+    if ( basei[1] < this->m_StartIndex[1] )
+      {
+      basei[1] = this->m_StartIndex[1];
+      }
+    const InternalComputationType & distance1 = index[1] - static_cast< InternalComputationType >( basei[1] );
+
+    const TInputImage * const inputImagePtr = this->GetInputImage();
+    RealType & val00 = m_Val00[threadId];
+    CastInto(val00, inputImagePtr->GetPixel(basei));
+
+    if ( distance0 <= 0. && distance1 <= 0. )
+      {
+      MoveInto(output, val00); // TODO: study a direct CastInto from GetPixel to output
+      return;
+      }
+    else if ( distance1 <= 0. ) // if they have the same "y"
+      {
+      ++basei[0];  // then interpolate across "x"
+      if ( basei[0] > this->m_EndIndex[0] )
+        {
+        MoveInto(output, val00);
+        return;
+        }
+      RealType & val10 = m_Val10[threadId];
+      CastInto(val10, inputImagePtr->GetPixel(basei));
+      val10 -= val00;
+      val10 *= distance0;
+      val10 += val00;
+      MoveInto(output, val10);
+      return;
+      // return ( static_cast< OutputType >( val00 + ( val10 - val00 ) * distance0 ) );
+      }
+    else if ( distance0 <= 0. ) // if they have the same "x"
+      {
+      ++basei[1];  // then interpolate across "y"
+      if ( basei[1] > this->m_EndIndex[1] )
+        {
+        MoveInto(output, val00);
+        return;
+        }
+      // return ( static_cast< OutputType >( val00 + ( val01 - val00 ) * distance1 ) );
+      RealType & val01 = m_Val01[threadId];
+      CastInto(val01, inputImagePtr->GetPixel(basei)); /* val01 */
+      val01 -= val00;
+      val01 *= distance1;
+      val01 += val00;
+      MoveInto(output, val01); // if same type => swap, otherwise, use cast_into
+      return;
+      }
+    // fall-through case:
+    // interpolate across "xy"
+    ++basei[0];
+    if ( basei[0] > this->m_EndIndex[0] ) // interpolate across "y"
+      {
+      --basei[0];
+      ++basei[1];
+      if ( basei[1] > this->m_EndIndex[1] )
+        {
+        MoveInto(output, val00);
+        return;
+        }
+      // const RealType & val01 = inputImagePtr->GetPixel(basei);
+      // return ( static_cast< OutputType >( val00 + ( val01 - val00 ) * distance1 ) );
+      RealType & val01 = m_Val01[threadId];
+      CastInto(val01, inputImagePtr->GetPixel(basei));
+      val01 -= val00;
+      val01 *= distance1;
+      val01 += val00;
+      MoveInto(output, val01);
+      return;
+      }
+    // const RealType & val10 = inputImagePtr->GetPixel(basei);
+
+    // const RealType & valx0 = val00 + ( val10 - val00 ) * distance0;
+    RealType & valx0 = m_Valx0[threadId];
+    CastInto(valx0, inputImagePtr->GetPixel(basei)); /* val10 */
+    valx0 -= val00;
+    valx0 *= distance0;
+    valx0 += val00;
+
+    ++basei[1];
+    if ( basei[1] > this->m_EndIndex[1] ) // interpolate across "x"
+      {
+      MoveInto(output, valx0);
+      return;
+      }
+    // const RealType & val11 = inputImagePtr->GetPixel(basei);
+    RealType & valx1 = m_Valx1[threadId];
+    CastInto(valx1, inputImagePtr->GetPixel(basei)); /* val11 */
+
+    --basei[0];
+    RealType & val01 = m_Val01[threadId];
+    CastInto(val01, inputImagePtr->GetPixel(basei));
+
+    //const RealType & valx1 = val01 + ( val11 - val01 ) * distance0;
+    // valx1 = val11; already done
+    valx1 -= val01;
+    valx1 *= distance0;
+    valx1 += val01;
+    valx1 -= valx0;
+    valx1 *= distance1;
+    valx1 += valx0;
+    MoveInto(output, valx1);
+  }
+#endif
 
   inline OutputType EvaluateOptimized(const Dispatch< 3 > &,
                                       const ContinuousIndexType & index) const
@@ -494,8 +774,26 @@ private:
     return this->EvaluateUnoptimized(index);
   }
 
+  void EvaluateOptimized(const DispatchBase &,
+          const ContinuousIndexType & index, OutputType & output, itk::ThreadIdType threadId) const
+  {
+    this->EvaluateUnoptimized(index, output, threadId);
+  }
+
+  /** Cached values.
+   * @todo: be thread aware
+   */
+  mutable std::vector<RealType> m_Val00;
+  mutable std::vector<RealType> m_Val01;
+  mutable std::vector<RealType> m_Val10;
+  mutable std::vector<RealType> m_Valx0;
+  mutable std::vector<RealType> m_Valx1;
+
   virtual inline OutputType EvaluateUnoptimized(
     const ContinuousIndexType & index) const;
+
+  virtual inline void EvaluateUnoptimized(
+    const ContinuousIndexType & index, OutputType & output, itk::ThreadIdType threadId) const;
 
   /** \brief A method to generically set all components to zero
    */
@@ -509,7 +807,7 @@ private:
       idx.Fill(0);
       const typename TInputImage::PixelType & tempPixel = inputImagePtr->GetPixel(idx);
       const unsigned int sizeOfVarLengthVector = tempPixel.GetSize();
-      tempZeros.SetSize(sizeOfVarLengthVector);
+      tempZeros.SetSize(sizeOfVarLengthVector, DontShrinkToFit(), DumpOldValues());
       tempZeros.Fill(NumericTraits< RealTypeScalarRealType >::ZeroValue());
       }
 

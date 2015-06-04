@@ -62,6 +62,31 @@ public:
   /** Evaluate at the specified input position */
   virtual OutputType Evaluate(const InputType & input) const = 0;
 
+  /** \c Evaluate overload aimed at \c itk::VariableLengthVector.
+   * The default implementation is there to prepare smoothly the
+   * convertion from the \c Evaluate overload which is inefficient with
+   * \c itk::VariableLengthVector to the efficient overload.
+   */
+  virtual void EvaluateNoCopy(const InputType & input, OutputType & output, itk::ThreadIdType threadId) const
+  {
+      (void)threadId;
+      output = Evaluate(input);
+  }
+
+  /** Notifies the number of threads expected to work on the image
+   * function.
+   * This information will be needed to prepare cached variables used by
+   * some image function specializations.
+   */
+  virtual void notifyNbThreads(itk::ThreadIdType threadId) {
+      (void)threadId;
+  }
+
+
+  // Two approaches to test for the ThreadId
+  // 1- TLS set with a notifyCurrentThreadId
+  // 2- threadId parameter to EvaluateNoCopyXxx() functions
+
 protected:
   FunctionBase(){}
   ~FunctionBase(){}

@@ -115,6 +115,18 @@ RGBPixel< T >
   return result;
 }
 
+template< typename T >
+RGBPixel< T > &
+RGBPixel< T >
+::operator*=(const ComponentType & r)
+{
+  for ( unsigned int i = 0; i < 3; i++ )
+    {
+    ( *this )[i] *= r;
+    }
+  return *this;
+}
+
 /**
  * Returns the results from a test for equality (all components must be equal)
  */
