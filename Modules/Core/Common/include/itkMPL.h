@@ -18,78 +18,123 @@
 #ifndef itkMPL_h
 #define itkMPL_h
 
-// Excerpt of codes from
-// - boost/utility/enable_if.hpp
-// - boost/mpl/bool.hpp
+#include "itkIsSame.h"
+#include "itkEnableIf.h"
 
 namespace itk {
-    template <bool TP, typename T1, typename T2> struct if_;
-    template <typename T1, typename T2> struct if_<true , T1, T2>{ typedef T1 type; };
-    template <typename T1, typename T2> struct if_<false, T1, T2>{ typedef T2 type; };
+  /** \cond HIDE_META_PROGRAMMING */
+  /**\defgroup MPL Meta Programming Library
+   * \ingroup Common
+   * This module contains definitions aimed at metaprogramming.
+   * They are mainly codes borrowed or inspired from C++11 or indirectly boost,
+   * with with ITK UpperCamelCase naming policy.
+   */
 
-    // Copyright 2003 (c) The Trustees of Indiana University.
 
-    // Use, modification, and distribution is subject to the Boost Software
-    // License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
-    // http://www.boost.org/LICENSE_1_0.txt)
+  /** MPL \c if control-statement.
+   * \tparam VP Boolean predicate
+   * \tparam T1 Type returned if the predicate is true
+   * \tparam T2 Type returned if the predicate is false
+   * \ingroup MPL
+   */
+  template <bool VP, typename T1, typename T2> struct If_;
+  /** \cond SPECIALIZATION_IMPLEMENTATION */
+  template <typename T1, typename T2> struct If_<true , T1, T2>{ typedef T1 Type; };
+  template <typename T1, typename T2> struct If_<false, T1, T2>{ typedef T2 Type; };
+  /**\endcond*/
 
-    //    Authors: Jaakko Jarvi (jajarvi at osl.iu.edu)
-    //             Jeremiah Willcock (jewillco at osl.iu.edu)
-    //             Andrew Lumsdaine (lums at osl.iu.edu)
-    template <bool TB, class T = void>
-        struct enable_if_c {
-            typedef T type;
-        };
+  namespace mpl {
 
-    template <class T>
-        struct enable_if_c<false, T> {};
+    /** MPL \c OR operator on constants.
+     * \tparam VF1 First boolean expression
+     * \tparam VF2 Second boolean expression
+     * \ingroup MPL
+     */
+    template < bool VF1, bool VF2> struct OrC : TrueType { };
+    /** \cond SPECIALIZATION_IMPLEMENTATION */
+    template <> struct OrC<false, false> : FalseType {};
+    /**\endcond*/
+    /** MPL \c OR operator on types.
+     * \tparam TF1 First boolean type
+     * \tparam TF2 Second boolean type
+     *
+     * This \em overload automatically fetches \c TF1 and \c TF2 values.
+     * However, beware, it won't work with standard C++ traits or boost traits.
+     * Indeed, this overload expects the \em value to follow UpperCamelCase ITK
+     * naming policy instead of the standard snake_case policy.
+     * \ingroup MPL
+     */
+    template < typename TF1, typename TF2> struct Or_ : OrC<TF1::Value, TF2::Value>
+    { typedef typename OrC<TF1::Value, TF2::Value>::Type Type; };
 
-    template <class TCond, class T = void>
-        struct enable_if : public enable_if_c<TCond::value, T> {};
+    /** MPL \c AND operator on constants.
+     * \tparam VF1 First boolean expression
+     * \tparam VF2 Second boolean expression
+     * \ingroup MPL
+     */
+    template < bool VF1, bool VF2> struct AndC : FalseType { };
+    /** \cond SPECIALIZATION_IMPLEMENTATION */
+    template <> struct AndC<true, true> : TrueType {};
+    /**\endcond*/
+    /** MPL \c AND operator on types.
+     * \tparam TF1 First boolean type
+     * \tparam TF2 Second boolean type
+     *
+     * This \em overload automatically fetches \c TF1 and \c TF2 values.
+     * However, beware, it won't work with standard C++ traits or boost traits.
+     * Indeed, this overload expects the \em value to follow UpperCamelCase ITK
+     * naming policy instead of the standard snake_case policy.
+     * \ingroup MPL
+     */
+    template < typename TF1, typename TF2> struct And_ : AndC<TF1::Value, TF2::Value>
+    { typedef typename AndC<TF1::Value, TF2::Value>::Type Type; };
 
-    //  (C) Copyright Steve Cleary, Beman Dawes, Howard Hinnant & John Maddock 2000.
-    //  Use, modification and distribution are subject to the Boost Software License,
-    //  Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
-    //  http://www.boost.org/LICENSE_1_0.txt).
-    //
-    //  See http://www.boost.org/libs/type_traits for most recent version including documentation.
+    /** MPL \c XOR operator on constants.
+     * \tparam VF1 First boolean expression
+     * \tparam VF2 Second boolean expression
+     * \ingroup MPL
+     */
+    template < bool VF1, bool VF2> struct XorC : FalseType { };
+    /** \cond SPECIALIZATION_IMPLEMENTATION */
+    template <> struct XorC<true, false> : TrueType {};
+    template <> struct XorC<false, true> : TrueType {};
+    /**\endcond*/
+    /** MPL \c XOR operator on types.
+     * \tparam TF1 First boolean type
+     * \tparam TF2 Second boolean type
+     *
+     * This \em overload automatically fetches \c TF1 and \c TF2 values.
+     * However, beware, it won't work with standard C++ traits or boost traits.
+     * Indeed, this overload expects the \em value to follow UpperCamelCase ITK
+     * naming policy instead of the standard snake_case policy.
+     * \ingroup MPL
+     */
+    template < typename TF1, typename TF2> struct Xor_ : XorC<TF1::Value, TF2::Value>
+    { typedef typename XorC<TF1::Value, TF2::Value>::Type Type; };
 
-    template <class T, T Val>
-        struct integral_constant
-        {
-            typedef integral_constant<T, Val> type;
-            typedef T                         value_type;
-            static const T value = Val;
-        };
+    /** MPL \c NOT operator on constants.
+     * \tparam VF boolean expression to negate
+     * \ingroup MPL
+     */
+    template < bool VF > struct NotC : FalseType { };
+    /** \cond SPECIALIZATION_IMPLEMENTATION */
+    template <> struct NotC<false> : TrueType {};
+    template <> struct NotC<true>  : FalseType {};
+    /**\endcond*/
+    /** MPL \c NOT operator on types.
+     * \tparam TF Second boolean type
+     *
+     * This \em overload automatically fetches \c TF value.
+     * However, beware, it won't work with standard C++ traits or boost traits.
+     * Indeed, this overload expects the \em value to follow UpperCamelCase ITK
+     * naming policy instead of the standard snake_case policy.
+     * \ingroup MPL
+     */
+    template < typename TF> struct Not_ : NotC<TF::Value>
+    { typedef typename NotC<TF::Value>::Type Type; };
 
-    typedef integral_constant<bool, true>  true_type;
-    typedef integral_constant<bool, false> false_type;
+  } // mpl namespace
 
-    namespace mpl {
-
-        template < bool TF1, bool TF2> struct or_c : true_type { };
-        template <> struct or_c<false, false> : false_type {};
-        template < typename TF1, typename TF2> struct or_ : or_c<TF1::value, TF2::value>
-        { typedef typename or_c<TF1::value, TF2::value>::type type; };
-
-        template < bool TF1, bool TF2> struct and_c : false_type { };
-        template <> struct and_c<true, true> : true_type {};
-        template < typename TF1, typename TF2> struct and_ : and_c<TF1::value, TF2::value>
-        { typedef typename and_c<TF1::value, TF2::value>::type type; };
-
-        template < bool TF1, bool TF2> struct xor_c : false_type { };
-        template <> struct xor_c<true, false> : true_type {};
-        template <> struct xor_c<false, true> : true_type {};
-        template < typename TF1, typename TF2> struct xor_ : xor_c<TF1::value, TF2::value>
-        { typedef typename xor_c<TF1::value, TF2::value>::type type; };
-
-        template < bool TF > struct not_c : false_type { };
-        template <> struct not_c<false> : true_type {};
-        template <> struct not_c<true>  : false_type {};
-        template < typename TF> struct not_ : not_c<TF::value>
-        { typedef typename not_c<TF::value>::type type; };
-
-    } // mpl namespace
-
+    /** \endcond */
 } // itk namespace
 #endif // itkMPL_h

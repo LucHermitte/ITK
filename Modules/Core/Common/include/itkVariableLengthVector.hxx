@@ -21,7 +21,6 @@
 #include "itkNumericTraitsVariableLengthVectorPixel.h"
 #include "vnl/vnl_math.h"
 #include <cstring>
-  // MACCS 4.3 - optimization
 #include <cstdlib>
 #include <new>
 
@@ -82,12 +81,12 @@ template <typename VLVExpr1, typename VLVExpr2, typename  TBinaryOp>
 VariableLengthVector< TValue >
 ::VariableLengthVector(VLVExpr<VLVExpr1, VLVExpr2, TBinaryOp> const& rhs_)
 {
-    m_NumElements = rhs_.Size();
-    m_Data = this->AllocateElements(m_NumElements);
-    m_LetArrayManageMemory = true;
-    for ( ElementIdentifier i = 0; i < m_NumElements; ++i )
+  m_NumElements = rhs_.Size();
+  m_Data = this->AllocateElements(m_NumElements);
+  m_LetArrayManageMemory = true;
+  for ( ElementIdentifier i = 0; i < m_NumElements; ++i )
     {
-        this->m_Data[i] = static_cast<TValue>(rhs_[i]);
+    this->m_Data[i] = static_cast<TValue>(rhs_[i]);
     }
 }
 
@@ -97,13 +96,13 @@ VariableLengthVector< TValue > &
 VariableLengthVector< TValue >
 ::operator=(VLVExpr<VLVExpr1, VLVExpr2, TBinaryOp> const& rhs_)
 {
-    ElementIdentifier const N = rhs_.Size();
-    this->SetSize( N, DontShrinkToFit(), DumpOldValues() );
-    for ( ElementIdentifier i = 0; i < N; ++i )
+  ElementIdentifier const N = rhs_.Size();
+  this->SetSize( N, DontShrinkToFit(), DumpOldValues() );
+  for ( ElementIdentifier i = 0; i < N; ++i )
     {
-        this->m_Data[i] = static_cast<TValue>(rhs_[i]);
+    this->m_Data[i] = static_cast<TValue>(rhs_[i]);
     }
-    return *this;
+  return *this;
 }
 
 #endif
@@ -132,8 +131,8 @@ void VariableLengthVector< TValue >
       TValue *temp = this->AllocateElements(size);
       // only copy the portion of the data used in the old buffer
       std::copy(m_Data,
-                m_Data+m_NumElements,
-                temp);
+        m_Data+m_NumElements,
+        temp);
       if ( m_LetArrayManageMemory )
         {
         delete[] m_Data;
@@ -165,7 +164,7 @@ TValue *VariableLengthVector< TValue >
     // Intercept std::bad_alloc and any exception thrown from TValue
     // default constructor.
     itkGenericExceptionMacro(<< "Failed to allocate memory of length " << size
-                             << " for VariableLengthVector.");
+      << " for VariableLengthVector.");
     }
 }
 
@@ -235,17 +234,18 @@ template <typename TReallocatePolicy, typename TKeepValuesPolicy>
 void VariableLengthVector< TValue >
 ::SetSize(unsigned int sz, TReallocatePolicy reallocatePolicy, TKeepValuesPolicy keepValues)
 {
-    if (reallocatePolicy(sz, m_NumElements) || ! m_LetArrayManageMemory)
+  if (reallocatePolicy(sz, m_NumElements) || ! m_LetArrayManageMemory)
     {
-        TValue * temp = this->AllocateElements(sz);
-        keepValues(sz, m_NumElements, m_Data, temp); // possible leak if TValue copy may throw
-        if (m_LetArrayManageMemory) {
-          delete[] m_Data;
-        }
-        m_Data = temp;
-        m_LetArrayManageMemory = true;
+    TValue * temp = this->AllocateElements(sz); // may throw
+    keepValues(sz, m_NumElements, m_Data, temp); // possible leak if TValue copy may throw
+    // commit changes
+    if (m_LetArrayManageMemory) {
+      delete[] m_Data;
     }
-    m_NumElements = sz;
+    m_Data = temp;
+    m_LetArrayManageMemory = true;
+    }
+  m_NumElements = sz;
 }
 
 /** Set the all the elements of the array to the specified value */
@@ -263,6 +263,10 @@ VariableLengthVector< TValue > &
 VariableLengthVector< TValue >
 ::operator=(const Self & v)
 {
+  // No self assignment test is done. Indeed:
+  // - the operator already resists self assignment through a strong exception
+  // guarantee
+  // - the test becomes a pessimization as we never write "v = v;".
   ElementIdentifier const N = v.Size();
   this->SetSize( N, DontShrinkToFit(), DumpOldValues() );
   std::copy(&v.m_Data[0], &v.m_Data[N], &this->m_Data[0]);
@@ -277,8 +281,9 @@ VariableLengthVector< TValue > &
 VariableLengthVector< TValue >
 ::FastAssign(const Self & v)
 {
+  assert(this->m_LetArrayManageMemory);
   ElementIdentifier const N = v.Size();
-  this->SetSize( N, NeverReallocate(), DumpOldValues() );
+  assert(N == this->Size());
   std::copy(&v.m_Data[0], &v.m_Data[N], &this->m_Data[0]);
 
   return *this;

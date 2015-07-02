@@ -20,9 +20,11 @@
 
 namespace itk
 {
-
   /** \cond HIDE_META_PROGRAMMING */
-  /** borrowed from type_traits */
+  /** True Type.
+   * borrowed from type_traits
+   * \ingroup MPL
+   */
   struct TrueType
   {
     typedef bool     ValueType;
@@ -32,6 +34,10 @@ namespace itk
     operator ValueType() { return Value; }
   };
 
+  /** False type.
+   * borrowed from type_traits
+   * \ingroup MPL
+   */
   struct FalseType
   {
     typedef bool      ValueType;
@@ -40,17 +46,27 @@ namespace itk
     operator ValueType() { return Value; }
   };
 
+  /** Tells whether two types are identical.
+   * Default case: returns that types differ.
+   * \ingroup MPL
+   */
   template<typename, typename>
   struct IsSame
     : public FalseType
   {
   };
 
+  /** \cond SPECIALIZATION_IMPLEMENTATION */
+  /** Tells whether two types are identical.
+   * Overload: returns that the two types are identical
+   * \ingroup MPL
+   */
   template<typename T>
   struct IsSame<T, T>
     : public TrueType
   {
   };
+  /**\endcond*/
 
   /** \endcond */
 

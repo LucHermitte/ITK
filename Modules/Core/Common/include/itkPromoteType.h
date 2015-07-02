@@ -21,14 +21,14 @@
 // Simplification of boost::common_type
 namespace itk {
     namespace details {
-        template <int N, typename TA, typename TB> struct size_to_type;
-        template <int N> struct identity { typedef char type[N]; };
+        template <int N, typename TA, typename TB> struct SizeToType;
+        template <int N> struct Identity { typedef char Type[N]; };
 
-#define ASSOC(N, typed)\
-        template <typename TA, typename TB> struct size_to_type<N,TA,TB> { typedef typed type; };
+#define ASSOC(N, Typed)\
+        template <typename TA, typename TB> struct SizeToType<N,TA,TB> { typedef Typed Type; };
 
-        ASSOC(1, A);
-        ASSOC(2, B);
+        ASSOC(1, TA);
+        ASSOC(2, TB);
 
         ASSOC(3,  short);
         ASSOC(4,  unsigned short);
@@ -50,23 +50,23 @@ namespace itk {
         static TB b;
 
         // Aimed at supporting overloads
-        template <typename T> static details::identity<1>::type& check(typename details::size_to_type<1,  TA, TB>::type, T);
-        template <typename T> static details::identity<2>::type& check(typename details::size_to_type<2,  TA, TB>::type, T);
+        template <typename T> static details::Identity<1>::Type& check(typename details::SizeToType<1,  TA, TB>::Type, T);
+        template <typename T> static details::Identity<2>::Type& check(typename details::SizeToType<2,  TA, TB>::Type, T);
 
         // Common numeric types
-        static details::identity<3 >::type& check(typename details::size_to_type<3,  TA, TB>::type, int);
-        static details::identity<4 >::type& check(typename details::size_to_type<4,  TA, TB>::type, int);
-        static details::identity<5 >::type& check(typename details::size_to_type<5,  TA, TB>::type, int);
-        static details::identity<6 >::type& check(typename details::size_to_type<6,  TA, TB>::type, int);
-        static details::identity<7 >::type& check(typename details::size_to_type<7,  TA, TB>::type, int);
-        static details::identity<8 >::type& check(typename details::size_to_type<8,  TA, TB>::type, int);
-        static details::identity<9 >::type& check(typename details::size_to_type<9,  TA, TB>::type, int);
-        static details::identity<10>::type& check(typename details::size_to_type<10, TA, TB>::type, int);
-        static details::identity<11>::type& check(typename details::size_to_type<11, TA, TB>::type, int);
-        static details::identity<12>::type& check(typename details::size_to_type<12, TA, TB>::type, int);
-        static details::identity<13>::type& check(typename details::size_to_type<13, TA, TB>::type, int);
+        static details::Identity<3 >::Type& check(typename details::SizeToType<3,  TA, TB>::Type, int);
+        static details::Identity<4 >::Type& check(typename details::SizeToType<4,  TA, TB>::Type, int);
+        static details::Identity<5 >::Type& check(typename details::SizeToType<5,  TA, TB>::Type, int);
+        static details::Identity<6 >::Type& check(typename details::SizeToType<6,  TA, TB>::Type, int);
+        static details::Identity<7 >::Type& check(typename details::SizeToType<7,  TA, TB>::Type, int);
+        static details::Identity<8 >::Type& check(typename details::SizeToType<8,  TA, TB>::Type, int);
+        static details::Identity<9 >::Type& check(typename details::SizeToType<9,  TA, TB>::Type, int);
+        static details::Identity<10>::Type& check(typename details::SizeToType<10, TA, TB>::Type, int);
+        static details::Identity<11>::Type& check(typename details::SizeToType<11, TA, TB>::Type, int);
+        static details::Identity<12>::Type& check(typename details::SizeToType<12, TA, TB>::Type, int);
+        static details::Identity<13>::Type& check(typename details::SizeToType<13, TA, TB>::Type, int);
     public:
-        typedef typename details::size_to_type<sizeof check(a+b, 0), TA, TB>::type type;
+        typedef typename details::SizeToType<sizeof check(a+b, 0), TA, TB>::Type Type;
     };
 
 
@@ -75,12 +75,12 @@ namespace itk {
 #if 0
 #include <boost/mpl/assert.hpp>
 #include <boost/type_traits/is_same.hpp>
-BOOST_MPL_ASSERT((boost::is_same<itk::PromoteType<int,int>         ::type, int>));
-BOOST_MPL_ASSERT((boost::is_same<itk::PromoteType<short,int>       ::type, int>));
-BOOST_MPL_ASSERT((boost::is_same<itk::PromoteType<double,int>      ::type, double>));
-BOOST_MPL_ASSERT((boost::is_same<itk::PromoteType<float,int>       ::type, float>));
-BOOST_MPL_ASSERT((boost::is_same<itk::PromoteType<long,int>        ::type, long>));
-BOOST_MPL_ASSERT((boost::is_same<itk::PromoteType<long,long double>::type, long double>));
+BOOST_MPL_ASSERT((boost::is_same<itk::PromoteType<int,int>         ::Type, int>));
+BOOST_MPL_ASSERT((boost::is_same<itk::PromoteType<short,int>       ::Type, int>));
+BOOST_MPL_ASSERT((boost::is_same<itk::PromoteType<double,int>      ::Type, double>));
+BOOST_MPL_ASSERT((boost::is_same<itk::PromoteType<float,int>       ::Type, float>));
+BOOST_MPL_ASSERT((boost::is_same<itk::PromoteType<long,int>        ::Type, long>));
+BOOST_MPL_ASSERT((boost::is_same<itk::PromoteType<long,long double>::Type, long double>));
 #endif
 
 #endif // itkPromoteType_h

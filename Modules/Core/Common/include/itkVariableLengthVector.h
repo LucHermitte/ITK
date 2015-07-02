@@ -31,57 +31,172 @@
 
 namespace itk
 {
-  struct AlwaysReallocate {
-      bool operator()(unsigned int newSize, unsigned int oldSize) const
+  /** \c VariableLengthVector Allocation Policy: Always reallocate memory.
+   * This policy, when used from \c VariableLengthVector::SetSize(), always
+   * implies that the previous internal buffer will be reallocated. Even if
+   * enough memory was available.
+   * \return true (always)
+   *
+   * \sa \c itk::VariableLengthVector::SetSize
+   * \sa \c NeverReallocate
+   * \sa \c ShrinkToFit
+   * \sa \c DontShrinkToFit
+   * \ingroup ITKCommon
+   * \ingroup DataRepresentation
+   */
+  struct AlwaysReallocate
+    {
+    bool operator()(unsigned int newSize, unsigned int oldSize) const
       {
-          (void)newSize;
-          (void)oldSize;
-          return true;
+      (void)newSize;
+      (void)oldSize;
+      return true;
       }
-  };
-  struct NeverReallocate {
-      bool operator()(unsigned int newSize, unsigned int oldSize) const
-      {
-          (void)newSize;
-          (void)oldSize;
-          assert(newSize == oldSize && "SetSize is expected to never change the VariableLengthVector size...");
-          // A typical scenario would be:
-          // VariableLengthVector<...> v;
-          // v.SetSize(someFixedSize)
-          // for (pixel : image) {
-          //     assert(expression.size() == someFixedSize);
-          //     v.FastAssign( expression );
-          // }
-          return true;
-      }
-  };
-  struct ShrinkToFit {
-      bool operator()(unsigned int newSize, unsigned int oldSize) const
-      { return newSize != oldSize; }
-  };
-  struct DontShrinkToFit {
-      bool operator()(unsigned int newSize, unsigned int oldSize) const
-      { return newSize > oldSize; }
-  };
+    };
 
-  struct KeepOldValues {
+  /** \c VariableLengthVector Allocation Policy: Never reallocate memory.
+   * This policy, when used from \c VariableLengthVector::SetSize(), always
+   * implies that the previous internal buffer will be kept. Even if not enough
+   * memory was available.
+   * \return false (always)
+   *
+   * \pre <tt>oldSize == newSize</tt>, checked by assertion
+   * This policy is expected to be used when we know by construction that the
+   * size of a \c VariableLengthVector never changes within a loop. For
+   * instance, a typical scenario would be:
+   * \code
+   * VariableLengthVector<...> v;
+   * v.SetSize(someFixedSize);
+   * for (auto && pixel : image) {
+   *     assert(expression.size() == someFixedSize);
+   *     v.FastAssign( expression );
+   * }
+   * \endcode
+   *
+   * \sa \c itk::VariableLengthVector::SetSize
+   * \sa \c AlwaysReallocate
+   * \sa \c ShrinkToFit
+   * \sa \c DontShrinkToFit
+   * \ingroup ITKCommon
+   * \ingroup DataRepresentation
+   */
+  struct NeverReallocate
+    {
+    bool operator()(unsigned int newSize, unsigned int oldSize) const
+      {
+      (void)newSize;
+      (void)oldSize;
+      assert(newSize == oldSize && "SetSize is expected to never change the VariableLengthVector size...");
+      return true;
+      }
+    };
+
+  /** \c VariableLengthVector Allocation Policy: reallocate memory only when
+   * size changes.
+   * This policy, when used from \c VariableLengthVector::SetSize(), will
+   * reallocate the internal buffer only if the size of the \c
+   * VariableLengthVector changes.
+   * \return whether \c newSize differs from \c oldSize
+   *
+   * \note The name is related to \c DontShrinkToFit reallocation policy that
+   * will avoid reallocating when enough memory has already been allocated.
+   *
+   * \sa \c itk::VariableLengthVector::SetSize
+   * \sa \c AlwaysReallocate
+   * \sa \c NeverReallocate
+   * \sa \c DontShrinkToFit
+   * \ingroup ITKCommon
+   * \ingroup DataRepresentation
+   */
+  struct ShrinkToFit
+    {
+    bool operator()(unsigned int newSize, unsigned int oldSize) const
+      { return newSize != oldSize; }
+    };
+
+  /** \c VariableLengthVector Allocation Policy: reallocate memory only when
+   * size increases.
+   * This policy, when used from \c VariableLengthVector::SetSize(), will
+   * reallocate the internal buffer only if the new size requested for the \c
+   * VariableLengthVector increases.
+   * \return whether \c newSize is bigger than \c oldSize
+   *
+   * \warning Unlike classes like \c std::vector<>, \c VariableLengthVector has
+   * no capacity concept: the size of the \c VariableLengthVector is its
+   * capacity. However, will help a class without capacity to emulate one. The
+   * consequence will be reallocations will occur with such scenarios.
+   * \code
+   * VariableLengthVector<...> v;
+   * v.SetSize(42);
+   * v.SetSize(12); // no reallocation
+   * v.SetSize(42); // pointless reallocation (given this policy)
+   * \endcode
+   *
+   * \sa \c itk::VariableLengthVector::SetSize
+   * \sa \c AlwaysReallocate
+   * \sa \c NeverReallocate
+   * \sa \c ShrinkToFit
+   * \ingroup ITKCommon
+   * \ingroup DataRepresentation
+   */
+  struct DontShrinkToFit
+    {
+    bool operator()(unsigned int newSize, unsigned int oldSize) const
+      { return newSize > oldSize; }
+    };
+
+  /** \c VariableLengthVector Invariability Policy: Always keep old values.
+   * This policy, when used from \c VariableLengthVector::SetSize(), always
+   * copies <tt>min(newSize,oldSize)</tt> previous values from the previous
+   * internal buffer to the new one
+   *
+   * \pre This policy is only meant to be used in case of reallocation, i.e. \c
+   * oldBuffer and \c newBuffer are expected to differ (unchecked).
+   *
+   * This behaviour mimics \c std::vector<>::resize() behaviour. However, it
+   * makes to sense from \c VariableLengthVector::operator=()
+   *
+   * \sa \c itk::VariableLengthVector::SetSize
+   * \sa \c DumpOldValues
+   * \ingroup ITKCommon
+   * \ingroup DataRepresentation
+   */
+  struct KeepOldValues
+    {
     template <typename TValue>
       void operator()(unsigned int newSize, unsigned int oldSize, TValue * oldBuffer, TValue * newBuffer) const
-      {
-          const std::size_t nb = std::min(newSize, oldSize);
-          std::copy(oldBuffer, oldBuffer+nb, newBuffer);
-      }
-  };
-  struct DumpOldValues {
+        {
+        const std::size_t nb = std::min(newSize, oldSize);
+        std::copy(oldBuffer, oldBuffer+nb, newBuffer);
+        }
+    };
+
+  /** \c VariableLengthVector Invariability Policy: Never keep old values.
+   * This policy, when used from \c VariableLengthVector::SetSize(), is a no-op.
+   * It won't try to copy previous values from the previous internal buffer to
+   * the new one.
+   *
+   * \pre This policy is only meant to be used in case of reallocation, i.e. \c
+   * oldBuffer and \c newBuffer are expected to differ (unchecked).
+   *
+   * This behaviour particularly fits \c VariableLengthVector::operator=()
+   *
+   * \sa \c itk::VariableLengthVector::SetSize
+   * \sa \c DumpOldValues
+   * \ingroup ITKCommon
+   * \ingroup DataRepresentation
+   */
+  struct DumpOldValues
+    {
     template <typename TValue>
       void operator()(unsigned int newSize, unsigned int oldSize, TValue * oldBuffer, TValue * newBuffer) const
-      {
-          (void)oldSize;
-          (void)newSize;
-          (void)oldBuffer;
-          (void)newBuffer;
-      }
-  };
+        {
+        (void)oldSize;
+        (void)newSize;
+        (void)oldBuffer;
+        (void)newBuffer;
+        }
+    };
 
 
 #if defined(ITK_USE_EXPRESSION_TEMPLATE)
@@ -186,10 +301,14 @@ public:
    * VariableLengthVector< float > vF( vI );
    * or for instance vF = static_cast< VariableLengthVector< float > >( vI );
    * \endcode
+   * \note However that static casting in this way will imply the allocation of
+   * a temporary \c VariableLengthVector. Prefer to directly use the assignment
+   * converting operator, or even \c CastInto() and \c MoveInto() in generic
+   * code where uses of \c static_cast<> would be required.
    */
   template< typename T >
   VariableLengthVector(const VariableLengthVector< T > & v)
-  {
+    {
     m_NumElements = v.Size();
     m_Data = this->AllocateElements(m_NumElements);
     m_LetArrayManageMemory = true;
@@ -197,9 +316,9 @@ public:
       {
       this->m_Data[i] = static_cast< ValueType >( v[i] );
       }
-  }
+    }
 
-  /** Copy constructer.. Override the default non-templated copy constructor
+  /** Copy constructor. Overrides the default non-templated copy constructor
    * that the compiler provides */
   VariableLengthVector(const VariableLengthVector< TValue > & v);
 
@@ -209,13 +328,14 @@ public:
    * \param[in,out] v  other \c VariableLengthVector to be swapped with.
    * \throw None
    */
-  void Swap(Self & v) {
-      assert(m_LetArrayManageMemory);
-      assert(v.m_LetArrayManageMemory);
-      using std::swap;
-      swap(v.m_Data       , m_Data);
-      swap(v.m_NumElements, m_NumElements);
-  }
+  void Swap(Self & v)
+    {
+    assert(m_LetArrayManageMemory);
+    assert(v.m_LetArrayManageMemory);
+    using std::swap;
+    swap(v.m_Data       , m_Data);
+    swap(v.m_NumElements, m_NumElements);
+    }
 
 #if defined(ITK_USE_EXPRESSION_TEMPLATE)
   template <typename TExpr1, typename TExpr2, typename  TBinaryOp>
@@ -227,20 +347,28 @@ public:
   /** Set the all the elements of the array to the specified value */
   void Fill(TValue const & v);
 
-  /** Assignment operator.
-   * Oddly enough when the VLV owns the memory, old elements are not copied
-   * ....
+  /** Converting assignment operator.
+   * \note Ensures a <em>String Exception Guarantee</em>: resists to
+   * self-assignment, and no changed are made is memory cannot be allocated to
+   * hold the new elements. This is excepting \c TValue assignment is a \c
+   * noexcept operation.
+   *
+   * \post if called on a \c VariableLengthVector proxy, the referenced values
+   * are left unchanged.
+   * \post \c m_LetArrayManageMemory is true
+   * \post <tt>GetSize() == v.GetSize()</tt>, modulo precision
+   * \post <tt>*this == v</tt>
    */
   template< typename T >
   Self & operator=(const VariableLengthVector< T > & v)
-  {
-#if 0
-      if ( m_Data == static_cast< void * >( const_cast< T * >
-                  ( ( const_cast< VariableLengthVector<T> & >( v ) ).GetDataPointer() ) ) )
-      {
-          return *this;
-      }
-#endif
+    {
+    // No self assignment test is done. Indeed:
+    // - the operator already resists self assignment through a strong exception
+    // guarantee
+    // - the test becomes a pessimization as we never write
+    //    VLV<const TValue> vcref(v.GetDataPointer(), v.GetSize());
+    //    ...;
+    //    v = vcref;
     ElementIdentifier const N = v.Size();
     this->SetSize( N, DontShrinkToFit(), DumpOldValues() );
     for ( ElementIdentifier i = 0; i < N; ++i )
@@ -248,14 +376,36 @@ public:
       this->m_Data[i] = static_cast< ValueType >( v[i] );
       }
     return *this;
-  }
+    }
 
-  /** Assignment operators  */
+  /** Assignment operator.
+   * \note Ensures a <em>String Exception Guarantee</em>: resists to
+   * self-assignment, and no changed are made is memory cannot be allocated to
+   * hold the new elements. This is excepting \c TValue assignment is a \c
+   * noexcept operation.
+   *
+   * \post if called on a \c VariableLengthVector proxy, the referenced values
+   * are left unchanged.
+   * \post \c m_LetArrayManageMemory is true
+   * \post <tt>GetSize() == v.GetSize()</tt>, modulo precision
+   * \post <tt>*this == v</tt>
+   */
   Self & operator=(const Self & v);
 
-  /** Fast Assignment */
+  /** Fast Assignment.
+   * \pre \c m_LetArrayManageMemory is true: the \c VariableLengthVector is not
+   * a proxy, checked with an assertion. Call <tt>SetSize(GetSize(), NeverReallocate(),
+   * DumpOldValues())</tt> to ensure a vector is not a proxy anymore.
+   * \pre current size is identical to the one from the right hand side
+   * operand, checked with an assertion.
+   */
   Self & FastAssign(const Self & v);
 
+  /** Assignment operator from a numeric value.
+   * \pre \c m_LetArrayManageMemory is true, unchecked
+   * If this operator is called on a \c VariableLengthVector proxy, referenced
+   * values will be overwritten. This isn't likely to be what is expected.
+   */
   Self & operator=(TValue const & v);
 
   /** Return the number of elements in the Array  */
@@ -273,6 +423,32 @@ public:
   /** Set one element */
   void SetElement(unsigned int i, const TValue & value) { m_Data[i] = value; }
 
+  /** Resizes the vector.
+   * \tparam TReallocatePolicy Policy that determines precisely the conditions
+   * under which the internal buffer shall be reallocated.
+   * \tparam TKeepValuesPolicy Policy that determines whether old elements
+   * shall be kept
+   *
+   * \internal
+   * The purpose of this overload is to fine tune what \c SetSize() does. Some
+   * users seem to need to always reallocate, or to maintain old elements.
+   * However, some usages requires fast resizing. In the assignment operators
+   * cases, we don't need to reallocate anything if we have enough memory, and
+   * certainly not to maintain previous values as they'll get overridden with
+   * new ones.
+   * \internal
+   * If we could assert that \c VariableLengthVector proxies would (shall!)
+   * never be assigned anything, we could benefit for a version that won't
+   * check \c m_LetArrayManageMemory.
+   *
+   * \post \c m_LetArrayManageMemory is true
+   * \sa \c AlwaysReallocate
+   * \sa \c NeverReallocate
+   * \sa \c ShrinkToFit
+   * \sa \c DontShrinkToFit
+   * \sa \c KeepOldValues
+   * \sa \c DumpOldValues
+   */
   template <typename TReallocatePolicy, typename TKeepValuesPolicy>
   void SetSize(unsigned int sz,
           TReallocatePolicy reallocatePolicy,
@@ -289,15 +465,15 @@ public:
    * length is different from the current length, existing data will be lost.
    * The default is \c true. */
   void SetSize(unsigned int sz, bool destroyExistingData = true)
-  {
-      // Stays compatiable with previous code version
-      // And works around the fact template function can't have default
-      // arguments on template types.
-      if (destroyExistingData)
-          SetSize(sz, AlwaysReallocate(), KeepOldValues());
-      else
-          SetSize(sz, ShrinkToFit(), KeepOldValues());
-  }
+    {
+    // Stays compatible with previous code version
+    // And works around the fact C++03 template functions can't have default
+    // arguments on template types.
+    if (destroyExistingData)
+      SetSize(sz, AlwaysReallocate(), KeepOldValues());
+    else
+      SetSize(sz, ShrinkToFit(), KeepOldValues());
+    }
 
   /** Destroy data that is allocated internally, if LetArrayManageMemory is
    * true. */
@@ -348,18 +524,18 @@ public:
    * \note For efficiency, the length of the vectors is not checked;
    * they are assumed to have the same length. */
   template< typename T >
-      inline Self operator+(const VariableLengthVector< T > & v) const
-      {
-          assert( m_NumElements == v.GetSize() );
-          const ElementIdentifier length = v.Size();
-          Self                    result(length);
+  inline Self operator+(const VariableLengthVector< T > & v) const
+    {
+    assert( m_NumElements == v.GetSize() );
+    const ElementIdentifier length = v.Size();
+    Self                    result(length);
 
-          for ( ElementIdentifier i = 0; i < length; i++ )
-          {
-              result[i] = ( *this )[i] + static_cast< ValueType >( v[i] );
-          }
-          return result;
+    for ( ElementIdentifier i = 0; i < length; i++ )
+      {
+      result[i] = ( *this )[i] + static_cast< ValueType >( v[i] );
       }
+    return result;
+    }
 
   /** Element-wise subtraction of vectors. The vectors do not have to
    * have the same element type. The input vector elements are cast to
@@ -370,7 +546,7 @@ public:
    * they are assumed to have the same length. */
   template< typename T >
   inline Self operator-(const VariableLengthVector< T > & v) const
-  {
+    {
     assert( m_NumElements == v.GetSize() );
     const ElementIdentifier length = v.Size();
     Self                    result(length);
@@ -380,7 +556,7 @@ public:
       result[i] = ( *this )[i] - static_cast< ValueType >( v[i] );
       }
     return result;
-  }
+    }
 
   /** Multiply vector elements by a scalar 's'. The vector does not
    * have to have the same element type as the scalar type. The scalar
@@ -388,7 +564,7 @@ public:
    * multiplication is performed. */
   template< typename T >
   inline Self operator*(T s) const
-  {
+    {
     Self result(m_NumElements);
 
     for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
@@ -396,7 +572,7 @@ public:
       result[i] = m_Data[i] * static_cast< ValueType >( s );
       }
     return result;
-  }
+    }
 
   /** Divide vector elements by a scalar 's'. The vector does not
    * have to have the same element type as the scalar type. Both the
@@ -404,7 +580,7 @@ public:
    * division, and the result is cast to the ValueType. */
   template< typename T >
   inline Self operator/(T s) const
-  {
+    {
     Self result(m_NumElements);
 
     for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
@@ -414,23 +590,23 @@ public:
         / static_cast< RealValueType >( s ) );
       }
     return result;
-  }
+    }
 
   /** Add scalar 's' to each element of the vector.*/
   inline Self operator+(TValue s) const
-  {
-      Self result(m_NumElements);
+    {
+    Self result(m_NumElements);
 
-      for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
+    for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
       {
-          result[i] = m_Data[i] + s;
+      result[i] = m_Data[i] + s;
       }
-      return result;
-  }
+    return result;
+    }
 
   /** Subtract scalar 's' from each element of the vector.*/
   inline Self operator-(TValue s) const
-  {
+    {
     Self result(m_NumElements);
 
     for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
@@ -438,48 +614,48 @@ public:
       result[i] = m_Data[i] - s;
       }
     return result;
-  }
+    }
 #endif
 
   /** Prefix operator that subtracts 1 from each element of the
    * vector. */
   inline Self & operator--()
-  {
+    {
     for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
       {
       this->m_Data[i] -= static_cast< ValueType >( 1.0 );
       }
     return *this;
-  }
+    }
 
   /** Prefix operator that adds 1 to each element of the vector. */
   inline Self & operator++() // prefix operator ++v;
-  {
+    {
     for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
       {
       this->m_Data[i] += static_cast< ValueType >( 1.0 );
       }
     return *this;
-  }
+    }
 
   /** Postfix operator that subtracts 1 from each element of the
    * vector. */
   inline Self operator--(int) // postfix operator v--;
-  {
+    {
     Self tmp(*this);
 
     --tmp;
     return tmp;
-  }
+    }
 
   /** Postfix operator that adds 1 to each element of the vector. */
   inline Self operator++(int) // postfix operator v++;
-  {
+    {
     Self tmp(*this);
 
     ++tmp;
     return tmp;
-  }
+    }
 
   /** Element-wise subtraction of vector 'v' from the current
    * vector. The vectors do not have to have the same element
@@ -489,25 +665,24 @@ public:
    * \note For efficiency, the length of the vectors is not checked;
    * they are assumed to have the same length. */
   template< typename T >
-  inline Self & operator-=
-    (const VariableLengthVector< T > & v)
-  {
+  inline Self & operator-=(const VariableLengthVector< T > & v)
+    {
     for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
       {
       m_Data[i] -= static_cast< ValueType >( v[i] );
       }
     return *this;
-  }
+    }
 
   /** Subtract scalar 's' from each element of the current vector. */
   inline Self & operator-=(TValue s)
-  {
+    {
     for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
       {
       m_Data[i] -= s;
       }
     return *this;
-  }
+    }
 
   /** Element-wise addition of vector 'v' to the current vector. The
    * vectors do not have to have the same element type. The input
@@ -517,25 +692,24 @@ public:
    * \note For efficiency, the length of the vectors is not checked;
    * they are assumed to have the same length. */
   template< typename T >
-  inline Self & operator+=
-    (const VariableLengthVector< T > & v)
-  {
+  inline Self & operator+=(const VariableLengthVector< T > & v)
+    {
     for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
       {
       m_Data[i] += static_cast< ValueType >( v[i] );
       }
     return *this;
-  }
+    }
 
   /** Add scalar 's' to each element of the vector. */
   inline Self & operator+=(TValue s)
-  {
+    {
     for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
       {
       m_Data[i] += s;
       }
     return *this;
-  }
+    }
 
 #if defined(ITK_USE_EXPRESSION_TEMPLATE)
   template <typename TExpr1, typename TExpr2, typename TBinaryOp>
@@ -554,13 +728,13 @@ public:
    * multiplication. */
   template< typename T >
   inline Self & operator*=(T s)
-  {
+    {
     for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
       {
       m_Data[i] *= ( static_cast< ValueType >( s ) );
       }
     return *this;
-  }
+    }
 
   /** Divide vector elements by a scalar 's'. The vector does not
    * have to have the same element type as the scalar type. Both the
@@ -568,7 +742,7 @@ public:
    * division, and the result is cast to the ValueType. */
   template< typename T >
   inline Self & operator/=(T s)
-  {
+    {
     for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
       {
       m_Data[i] = static_cast< ValueType >(
@@ -576,7 +750,7 @@ public:
         / static_cast< RealValueType >( s ) );
       }
     return *this;
-  }
+    }
 
   /** Negates each vector element. */
   Self & operator-();  // negation operator
@@ -636,161 +810,162 @@ std::ostream & operator<<(std::ostream & os, const VariableLengthVector< TValue 
 #if defined(ITK_USE_EXPRESSION_TEMPLATE)
 template <typename TExpr> struct get_type
 {
-    typedef TExpr Type;
-    static type load(type const& v, unsigned int idx)
+  typedef TExpr Type;
+  static Type load(Type const& v, unsigned int idx)
     { (void)idx; return v; }
 };
 template <typename TExpr1, typename TExpr2> struct get_size
 {
-    static unsigned int Size(TExpr1 const&, TExpr2 const& rhs_)
+  static unsigned int Size(TExpr1 const&, TExpr2 const& rhs_)
     { return rhs_.Size(); }
 };
 template <typename TExpr1, typename TExpr2, typename TBinaryOp, typename  TRHS>
 struct get_size<VLVExpr<TExpr1, TExpr2, TBinaryOp>, TRHS>
 {
-    static unsigned int Size(VLVExpr<TExpr1, TExpr2, TBinaryOp> const& lhs_, TRHS const& )
+  static unsigned int Size(VLVExpr<TExpr1, TExpr2, TBinaryOp> const& lhs_, TRHS const& )
     { return lhs_.Size(); }
 };
 template <typename T, typename  TRHS>
 struct get_size<VariableLengthVector<T>, TRHS>
 {
-    static unsigned int Size(VariableLengthVector<T> const& lhs_, TRHS const& )
+  static unsigned int Size(VariableLengthVector<T> const& lhs_, TRHS const& )
     { return lhs_.Size(); }
 };
 
 template <typename TExpr1, typename TExpr2, typename  TBinaryOp>
 struct VLVExpr
 {
-    static const bool isVLV = true;
+  static const bool isVLV = true;
 
-    VLVExpr(TExpr1 const& lhs_, TExpr2 const& rhs_) : m_lhs(lhs_), m_rhs(rhs_){}
-    // TODO: detect constants to avoid computing sizes...
-    unsigned int Size() const { return get_size<TExpr1, TExpr2>::Size(m_lhs, m_rhs); }
+  VLVExpr(TExpr1 const& lhs_, TExpr2 const& rhs_) : m_lhs(lhs_), m_rhs(rhs_){}
+  // TODO: detect constants to avoid computing sizes...
+  unsigned int Size() const { return get_size<TExpr1, TExpr2>::Size(m_lhs, m_rhs); }
 
-    typedef typename  PromoteType<
-        typename get_type<TExpr1>::Type,
-        typename get_type<TExpr2>::Type        >::type  ResType;
-    typedef typename NumericTraits< ResType >::RealType RealValueType;
+  typedef typename  PromoteType<
+    typename get_type<TExpr1>::Type,
+    typename get_type<TExpr2>::Type       >::Type     ResType;
+  typedef typename NumericTraits< ResType >::RealType RealValueType;
 
-    ResType operator[](unsigned int idx) const {
-        return TBinaryOp::apply(
-                get_type<TExpr1>::load(m_lhs, idx),
-                get_type<TExpr2>::load(m_rhs, idx));
-    }
+  ResType operator[](unsigned int idx) const {
+    return TBinaryOp::apply(
+      get_type<TExpr1>::load(m_lhs, idx),
+      get_type<TExpr2>::load(m_rhs, idx));
+  }
 
-    /** Returns vector's Euclidean Norm  */
-    RealValueType GetNorm() const;
+  /** Returns vector's Euclidean Norm  */
+  RealValueType GetNorm() const;
 
-    /** Returns vector's squared Euclidean Norm  */
-    RealValueType GetSquaredNorm() const;
+  /** Returns vector's squared Euclidean Norm  */
+  RealValueType GetSquaredNorm() const;
 
 private:
-    TExpr1 const& m_lhs;
-    TExpr2 const& m_rhs;
+  TExpr1 const& m_lhs;
+  TExpr2 const& m_rhs;
 };
 
 template <typename T>
 struct get_type<VariableLengthVector<T> >
 {
-    typedef T Type;
-    static type load(VariableLengthVector<T>  const& v, unsigned int idx)
+  typedef T Type;
+  static Type load(VariableLengthVector<T>  const& v, unsigned int idx)
     { return v[idx]; }
 };
 template <typename TExpr1, typename TExpr2, typename TBinaryOp>
 struct get_type<VLVExpr<TExpr1, TExpr2, TBinaryOp> >
 {
-    typedef typename VLVExpr<TExpr1, TExpr2, TBinaryOp>::ResType Type;
-    static type load(VLVExpr<TExpr1, TExpr2, TBinaryOp> const& v, unsigned int idx)
+  typedef typename VLVExpr<TExpr1, TExpr2, TBinaryOp>::ResType Type;
+  static Type load(VLVExpr<TExpr1, TExpr2, TBinaryOp> const& v, unsigned int idx)
     { return v[idx]; }
 };
 
-namespace op {
-    struct plus  {
-        template <typename T1, typename T2>
-            static
-            typename PromoteType<T1, T2>::type apply(T1 const& lhs_, T2 const& rhs_)
-            { return lhs_ + rhs_; }
+namespace op
+{
+  struct plus
+    {
+    template <typename T1, typename T2>
+      static typename PromoteType<T1, T2>::Type apply(T1 const& lhs_, T2 const& rhs_)
+        { return lhs_ + rhs_; }
     };
 
-    struct sub  {
-        template <typename T1, typename T2>
-            static
-            typename PromoteType<T1, T2>::type apply(T1 const& lhs_, T2 const& rhs_)
-            { return lhs_ - rhs_; }
+  struct sub
+    {
+    template <typename T1, typename T2>
+      static typename PromoteType<T1, T2>::Type apply(T1 const& lhs_, T2 const& rhs_)
+        { return lhs_ - rhs_; }
     };
 
-    struct mult  {
-        template <typename T1, typename T2>
-            static
-            typename PromoteType<T1, T2>::type apply(T1 const& lhs_, T2 const& rhs_)
-            { return lhs_ * rhs_; }
+  struct mult
+    {
+    template <typename T1, typename T2>
+      static typename PromoteType<T1, T2>::Type apply(T1 const& lhs_, T2 const& rhs_)
+        { return lhs_ * rhs_; }
     };
 
-    struct div  {
-        template <typename T1, typename T2>
-            static
-            typename PromoteType<T1, T2>::type apply(T1 const& lhs_, T2 const& rhs_)
-            { return lhs_ / rhs_; }
+  struct div
+    {
+    template <typename T1, typename T2>
+      static typename PromoteType<T1, T2>::Type apply(T1 const& lhs_, T2 const& rhs_)
+        { return lhs_ / rhs_; }
     };
 } // op namespace
 
-#if 1
 template <typename T>
-struct is_VLV : false_type {};
+struct is_VLV : FalseType {};
 
 template <typename T>
-struct is_VLV<itk::VariableLengthVector<T> > : true_type {};
+struct is_VLV<itk::VariableLengthVector<T> > : TrueType {};
 
 template <typename TExpr1, typename TExpr2, typename TBinaryOp>
-struct is_VLV<VLVExpr<TExpr1, TExpr2,TBinaryOp> > : true_type {};
-#endif
+struct is_VLV<VLVExpr<TExpr1, TExpr2,TBinaryOp> > : TrueType {};
 
 template <typename TExpr1, typename TExpr2>
 inline
-typename enable_if<mpl::or_<is_VLV<TExpr1>, is_VLV<TExpr2> > , VLVExpr<TExpr1, TExpr2, op::plus> >::type
+typename EnableIf<mpl::Or_<is_VLV<TExpr1>, is_VLV<TExpr2> > , VLVExpr<TExpr1, TExpr2, op::plus> >::Type
 operator+(TExpr1 const& lhs_, TExpr2 const& rhs_)
 { return VLVExpr<TExpr1, TExpr2, op::plus>(lhs_, rhs_); }
 
 template <typename TExpr1, typename TExpr2>
 inline
-typename enable_if<mpl::or_<is_VLV<TExpr1>, is_VLV<TExpr2> > , VLVExpr<TExpr1, TExpr2, op::sub> >::type
+typename EnableIf<mpl::Or_<is_VLV<TExpr1>, is_VLV<TExpr2> > , VLVExpr<TExpr1, TExpr2, op::sub> >::Type
 operator-(TExpr1 const& lhs_, TExpr2 const& rhs_)
 { return VLVExpr<TExpr1, TExpr2, op::sub>(lhs_, rhs_); }
 
 template <typename TExpr1, typename TExpr2>
 inline
-typename enable_if<mpl::xor_<is_VLV<TExpr1>, is_VLV<TExpr2> > , VLVExpr<TExpr1, TExpr2, op::mult> >::type
+typename EnableIf<mpl::Xor_<is_VLV<TExpr1>, is_VLV<TExpr2> > , VLVExpr<TExpr1, TExpr2, op::mult> >::Type
 operator*(TExpr1 const& lhs_, TExpr2 const& rhs_)
 { return VLVExpr<TExpr1, TExpr2, op::mult>(lhs_, rhs_); }
 
 template <typename TExpr1, typename TExpr2>
 inline
-typename enable_if<mpl::and_<is_VLV<TExpr1>, mpl::not_<is_VLV<TExpr2> > > , VLVExpr<TExpr1, TExpr2, op::div> >::type
+typename EnableIf<mpl::And_<is_VLV<TExpr1>, mpl::Not_<is_VLV<TExpr2> > > , VLVExpr<TExpr1, TExpr2, op::div> >::Type
 operator/(TExpr1 const& lhs_, TExpr2 const& rhs_)
 { return VLVExpr<TExpr1, TExpr2, op::div>(lhs_, rhs_); }
 
 template <typename TExpr1, typename TExpr2, typename  TBinaryOp>
 std::ostream & operator<<(std::ostream &os, VLVExpr<TExpr1, TExpr2, TBinaryOp> const& v)
 {
-    os << "[";
-    if (v.Size() != 0) {
-        os << v[0];
-        for (unsigned int i = 1, N = v.Size(); i != N; ++i) {
-            os << ", " << v[i];
-        }
+  os << "[";
+  if (v.Size() != 0)
+    {
+    os << v[0];
+    for (unsigned int i = 1, N = v.Size(); i != N; ++i)
+      {
+      os << ", " << v[i];
+      }
     }
-    return os << "]";
+  return os << "]";
 }
 
 template <typename TExpr>
 inline
-typename enable_if<is_VLV<TExpr>, typename TExpr::RealValueType>::type
+typename EnableIf<is_VLV<TExpr>, typename TExpr::RealValueType>::Type
 GetNorm(TExpr const& v)
 { return static_cast<typename TExpr::RealValueType>(std::sqrt(static_cast<double>(GetSquaredNorm(v)))); }
 
 template <typename TExpr>
 inline
-typename enable_if<is_VLV<TExpr>, typename TExpr::RealValueType>::type
+typename EnableIf<is_VLV<TExpr>, typename TExpr::RealValueType>::Type
 GetSquaredNorm(TExpr const& v)
 {
   typedef typename TExpr::RealValueType RealValueType;
@@ -808,7 +983,6 @@ template <typename T>
 void swap(VariableLengthVector<T> &l_, VariableLengthVector<T> &r_)
 { l_.Swap(r_); }
 
-// MACCS 4.3 - optimization
 // aim: avoid a static cast that generates a new VLV
 template <typename TDest, typename TOrig>
 inline
@@ -819,23 +993,23 @@ void CastInto(VariableLengthVector<TDest> & d, VariableLengthVector<TOrig> const
  * Specialized function to convert a vector pixel into another vector pixel type.
  * This function is aimed at writing efficient algorithms that move pixel
  * values around. It is particularly important to not degrade performances on
- * \c itk::VariableLentghVector based pixels.
+ * \c itk::VariableLengthVector based pixels.
  *
  * While this overload does not really move (the internals of) \c o into \d
  * (as C++11 rvalue-references would permit), it will nonetheless avoid
- * allocating memory for a new \c VariableLentghVector, thing that would have
+ * allocating memory for a new \c VariableLengthVector, thing that would have
  * been a consequence of a \c static_cast<>.
  *
  * Instead, this overload will use the conversion assignment operator from \c
- * VariableLentghVector to copy (and convert on-the-fly) the value from \c o.
+ * VariableLengthVector to copy (and convert on-the-fly) the value from \c o.
 
- * @tparam TDest Internal pixel type of the destination pixel
- * @tparam TOrig Internal pixel type of the origin pixel
- * @param[out] d Destination pixel that shal receive the value of \c o
- * @param[in]  o Origin pixel
- * @pre \c d shall not be a \c VariableLentghVector that acts as a proxy.
+ * \tparam TDest Internal pixel type of the destination pixel
+ * \tparam TOrig Internal pixel type of the origin pixel
+ * \param[out] d Destination pixel that shal receive the value of \c o
+ * \param[in]  o Origin pixel
+ * \pre \c d shall not be a \c VariableLengthVector that acts as a proxy.
  *
- * @throw None
+ * \throw None
  * \see <tt>itk::MoveInto(TDest, TOrig)</tt>
  * \see <tt>itk::MoveInto(VariableLengthVector<T>, VariableLengthVector<T>)</tt>
  * \ingroup DataRepresentation
@@ -846,26 +1020,25 @@ inline
 void MoveInto(VariableLengthVector<TDest> & d, VariableLengthVector<TOrig> const& o)
 { d = o; }
 
-// MACCS 4.3 - optimization
 /**
  * Specialized function to move a vector pixel into another vector pixel.
  * This function is aimed at writing efficient algorithms that move pixel
  * values around. It is particularly important to not degrade performances on
- * \c itk::VariableLentghVector based pixels.
+ * \c itk::VariableLengthVector based pixels.
  *
- * Unlike the other overload that works on \c VariableLentghVector, this one
+ * Unlike the other overload that works on \c VariableLengthVector, this one
  * will move the content of \c o into \d. As we don't care about old \c o
- * content. Morevover in order to avoid the endless allocate-free cycles, the
+ * content. Moreover in order to avoid the endless allocate-free cycles, the
  * old content of \c o is moved into \c d. In other word, \c o and \c d
  * contents are swapped.
  *
- * @tparam TDest Internal pixel type of the destination pixel
- * @tparam TOrig Internal pixel type of the origin pixel
- * @param[in,out] d Destination pixel that shal receive the value of \c o
- * @param[in,out] o Origin pixel, that will received old \c d value.
- * @pre Neither \c d nor \c o shall not be \c VariableLentghVector s that act as proxy.
+ * \tparam TDest Internal pixel type of the destination pixel
+ * \tparam TOrig Internal pixel type of the origin pixel
+ * \param[in,out] d Destination pixel that shal receive the value of \c o
+ * \param[in,out] o Origin pixel, that will received old \c d value.
+ * \pre Neither \c d nor \c o shall not be \c VariableLengthVector s that act as proxy.
  *
- * @throw None
+ * \throw None
  * \see <tt>itk::MoveInto(VariableLengthVector<TDest>, VariableLengthVector<TOrig>)</tt>
  * \see <tt>itk::MoveInto(TDest, TOrig)</tt>
  * \ingroup DataRepresentation
