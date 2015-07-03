@@ -239,9 +239,10 @@ void VariableLengthVector< TValue >
     TValue * temp = this->AllocateElements(sz); // may throw
     keepValues(sz, m_NumElements, m_Data, temp); // possible leak if TValue copy may throw
     // commit changes
-    if (m_LetArrayManageMemory) {
+    if (m_LetArrayManageMemory)
+      {
       delete[] m_Data;
-    }
+      }
     m_Data = temp;
     m_LetArrayManageMemory = true;
     }

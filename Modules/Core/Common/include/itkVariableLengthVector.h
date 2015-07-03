@@ -21,13 +21,13 @@
 #define ITK_USE_EXPRESSION_TEMPLATE
 
 #include <cassert>
+#include <algorithm>
 #include "itkNumericTraits.h"
 
 #if defined(ITK_USE_EXPRESSION_TEMPLATE)
 #  include "itkPromoteType.h"
 #  include "itkMPL.h"
 #endif
-
 
 namespace itk
 {
@@ -197,7 +197,6 @@ namespace itk
         (void)newBuffer;
         }
     };
-
 
 #if defined(ITK_USE_EXPRESSION_TEMPLATE)
     template <typename TExpr1, typename TExpr2, typename  TBinaryOp>
@@ -665,7 +664,8 @@ public:
    * \note For efficiency, the length of the vectors is not checked;
    * they are assumed to have the same length. */
   template< typename T >
-  inline Self & operator-=(const VariableLengthVector< T > & v)
+  inline Self & operator-=
+    (const VariableLengthVector< T > & v)
     {
     for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
       {
@@ -692,7 +692,8 @@ public:
    * \note For efficiency, the length of the vectors is not checked;
    * they are assumed to have the same length. */
   template< typename T >
-  inline Self & operator+=(const VariableLengthVector< T > & v)
+  inline Self & operator+=
+    (const VariableLengthVector< T > & v)
     {
     for ( ElementIdentifier i = 0; i < m_NumElements; i++ )
       {
@@ -766,7 +767,7 @@ public:
   RealValueType GetSquaredNorm() const;
 
   /** letArrayManageMemory getter. */
-  bool isAProxy() const { return ! m_LetArrayManageMemory;}
+  bool IsAProxy() const { return ! m_LetArrayManageMemory;}
 private:
 
   bool              m_LetArrayManageMemory; // if true, the array is responsible
