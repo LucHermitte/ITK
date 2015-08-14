@@ -174,8 +174,8 @@ if(CMAKE_CONFIGURATION_TYPES)
 
   foreach(config ${CMAKE_CONFIGURATION_TYPES})
     set(CONFIG_ITK_WRAP_PYTHON_DIR "${CMAKE_CURRENT_BINARY_DIR}/${config}")
-    set(CONFIG_ITK_WRAP_LIBRARY_DIR "${ITK_BINARY_DIR}/${ITK_INSTALL_LIBRARY_DIR}/${config}")
-    set(CONFIG_ITK_WRAP_SWIG_PYTHON_DIR "${ITK_BINARY_DIR}/${ITK_INSTALL_LIBRARY_DIR}")
+    set(CONFIG_ITK_WRAP_LIBRARY_DIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/${config}")
+    set(CONFIG_ITK_WRAP_SWIG_PYTHON_DIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 
     # SWIG-generated libs files are sent to ${config} subdir, SWIG-generated *.py are not
     # This assumes that CMAKE_LIBRARY_OUTPUT_DIRECTORY is WrapITK_BINARY_DIR/bin (bad!)
@@ -186,7 +186,7 @@ if(CMAKE_CONFIGURATION_TYPES)
   endforeach()
 else()
   set(CONFIG_ITK_WRAP_PYTHON_DIR "${CMAKE_CURRENT_BINARY_DIR}")
-  set(CONFIG_ITK_WRAP_LIBRARY_DIR "${ITK_BINARY_DIR}/${ITK_INSTALL_LIBRARY_DIR}")
+  set(CONFIG_ITK_WRAP_LIBRARY_DIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/WrapITK.pth.in"
                  "${CMAKE_CURRENT_BINARY_DIR}/WrapITK.pth"
@@ -425,13 +425,13 @@ macro(itk_end_wrap_module_python)
       set_target_properties(${lib} PROPERTIES COMPILE_FLAGS "/wd4244")
     endif()
   endif()
-  target_link_libraries(${lib} ${WRAPPER_LIBRARY_LINK_LIBRARIES} ${PYTHON_LIBRARY})
+  target_link_libraries(${lib} LINK_PUBLIC ${WRAPPER_LIBRARY_LINK_LIBRARIES} ${PYTHON_LIBRARY})
   add_dependencies(${lib} ${WRAPPER_LIBRARY_NAME}Swig)
   if(ITK_WRAP_DOC)
     add_dependencies(${lib} ${WRAPPER_LIBRARY_NAME}Doxygen)
   endif()
   if(ITK_WRAP_EXPLICIT AND NOT ${WRAPPER_LIBRARY_NAME} STREQUAL ITKPyBase)
-    target_link_libraries(${lib} ${WRAPPER_LIBRARY_NAME}Explicit)
+    target_link_libraries(${lib} LINK_PUBLIC ${WRAPPER_LIBRARY_NAME}Explicit)
     add_dependencies(${lib} ${WRAPPER_LIBRARY_NAME}Explicit)
   endif()
   install(TARGETS "${lib}" DESTINATION "${ITK_INSTALL_LIBRARY_DIR}/ITK-${ITK_VERSION_MAJOR}.${ITK_VERSION_MINOR}/Python")
@@ -515,10 +515,14 @@ macro(itk_end_wrap_submodule_python group_name)
   list(APPEND ITK_WRAP_PYTHON_LIBRARY_DEPS "${python_file}" "${WRAPPER_MASTER_INDEX_OUTPUT_DIR}/python/${base_name}_ext.i" "${cpp_file}")
 
   # add this wrap_*.cmake stuff to the list of modules to init in the main module.
-  # first the extern c declaration
-  set(ITK_WRAP_PYTHON_LIBRARY_DECLS "${ITK_WRAP_PYTHON_LIBRARY_DECLS}extern \"C\" int init_${group_name}Python();\n")
-  # and the call of the extern function
-  set(ITK_WRAP_PYTHON_LIBRARY_CALLS "${ITK_WRAP_PYTHON_LIBRARY_CALLS}  init_${group_name}Python();\n")
+  # first the extern c declaration and then the call of the extern function
+  if(PYTHON_VERSION_STRING VERSION_GREATER 3.0)
+    set(ITK_WRAP_PYTHON_LIBRARY_DECLS "${ITK_WRAP_PYTHON_LIBRARY_DECLS} extern \"C\" int PyInit__${group_name}Python();\n")
+    set(ITK_WRAP_PYTHON_LIBRARY_CALLS "${ITK_WRAP_PYTHON_LIBRARY_CALLS} PyInit__${group_name}Python();\n")
+  else()
+    set(ITK_WRAP_PYTHON_LIBRARY_DECLS "${ITK_WRAP_PYTHON_LIBRARY_DECLS} extern \"C\" int init_${group_name}Python();\n")
+    set(ITK_WRAP_PYTHON_LIBRARY_CALLS "${ITK_WRAP_PYTHON_LIBRARY_CALLS} init_${group_name}Python();\n")
+  endif()
 
 endmacro()
 

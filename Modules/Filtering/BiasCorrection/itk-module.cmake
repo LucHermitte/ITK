@@ -5,18 +5,18 @@ image. The same need is common in microscopy images when the illumination is not
 uniform across the field of view.")
 
 itk_module(ITKBiasCorrection
-  DEPENDS
-    ITKImageFilterBase
+  ENABLE_SHARED
+  PRIVATE_DEPENDS
+    ITKCommon
+  COMPILE_DEPENDS
+    ITKOptimizers
     ITKImageGrid
     ITKImageIntensity
     ITKPolynomials
-    ITKStatistics
-    ITKOptimizers
   TEST_DEPENDS
     ITKTestKernel
-    ITKImageSources
-    ITKImageIntensity
-    ITKImageGrid
+    ITKOptimizers
+    ITKPolynomials
     ITKThresholding
   DESCRIPTION
     "${DOCUMENTATION}"

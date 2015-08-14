@@ -3,7 +3,8 @@ for interacting with and utilizing OpenCV within ITK. This includes symetric
 bridges for both image data and video data.")
 
 itk_module(ITKVideoBridgeOpenCV
-  DEPENDS
+  ENABLE_SHARED
+  COMPILE_DEPENDS
     ITKVideoCore
     ITKVideoIO
   TEST_DEPENDS

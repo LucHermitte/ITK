@@ -101,23 +101,23 @@ int itkVariableLengthVectorTest(int, char*[])
 
     // ===[ Keep old values
     // ---[ Shrink To Fit
-    x.SetSize(5, ShrinkToFit(), KeepOldValues());
+    x.SetSize(5, DoubleVariableLengthVectorType::ShrinkToFit(), DoubleVariableLengthVectorType::KeepOldValues());
     ASSERT( ! x.IsAProxy(), "After resizing a proxy, it shall not be a proxy anymore")
     ASSERT( ref[0]==x[0] && ref[1]==x[1] && ref[2]==x[2], "Old Values shall have been kept")
     x[3] = 3.0;
     x[4] = 4.0;
     double * start = &x[0];
 
-    x.SetSize(3, ShrinkToFit(), KeepOldValues());
+    x.SetSize(3, DoubleVariableLengthVectorType::ShrinkToFit(), DoubleVariableLengthVectorType::KeepOldValues());
     ASSERT( ! x.IsAProxy(), "After resizing, it shall never be a proxy");
     ASSERT( x == ref, "Values haven't been preserved");
     ASSERT(&x[0] != start, "ShrinkToFit shall induce a resizing");
     start = &x[0];
-    x.SetSize(3, ShrinkToFit(), KeepOldValues());
+    x.SetSize(3, DoubleVariableLengthVectorType::ShrinkToFit(), DoubleVariableLengthVectorType::KeepOldValues());
     ASSERT(&x[0] == start, "ShrinkToFit on the same size shall not induce a reallocation");
 
     // ---[ Don't Shrink To Fit
-    x.SetSize(5, DontShrinkToFit(), KeepOldValues());
+    x.SetSize(5, DoubleVariableLengthVectorType::DontShrinkToFit(), DoubleVariableLengthVectorType::KeepOldValues());
     ASSERT( ! x.IsAProxy(), "After resizing, it shall never be a proxy");
     ASSERT( ref[0]==x[0] && ref[1]==x[1] && ref[2]==x[2], "Old Values shall have been kept")
     ASSERT(&x[0] != start, "DontShrinkToFit shall induce a resizing when the size grows");
@@ -125,31 +125,31 @@ int itkVariableLengthVectorTest(int, char*[])
     x[4] = 4.0;
     start = &x[0];
 
-    x.SetSize(3, DontShrinkToFit(), KeepOldValues());
+    x.SetSize(3, DoubleVariableLengthVectorType::DontShrinkToFit(), DoubleVariableLengthVectorType::KeepOldValues());
     ASSERT( ! x.IsAProxy(), "After resizing, it shall never be a proxy");
     ASSERT( ref == x, "Old Values shall have been kept")
     ASSERT(&x[0] == start, "DontShrinkToFit shall not induce a resizing when the size diminishes");
     start = &x[0];
 
-    x.SetSize(3, DontShrinkToFit(), KeepOldValues());
+    x.SetSize(3, DoubleVariableLengthVectorType::DontShrinkToFit(), DoubleVariableLengthVectorType::KeepOldValues());
     ASSERT( ! x.IsAProxy(), "After resizing, it shall never be a proxy");
     ASSERT( ref == x, "Old Values shall have been kept")
     ASSERT(&x[0] == start, "DontShrinkToFit shall not induce a resizing when the size stays the same");
 
     // ---[ Always Reallocate
-    x.SetSize(5, AlwaysReallocate(), KeepOldValues());
+    x.SetSize(5, DoubleVariableLengthVectorType::AlwaysReallocate(), DoubleVariableLengthVectorType::KeepOldValues());
     ASSERT( ! x.IsAProxy(), "After resizing, it shall never be a proxy");
     ASSERT( ref[0]==x[0] && ref[1]==x[1] && ref[2]==x[2], "Old Values shall have been kept")
     ASSERT(&x[0] != start, "AlwaysReallocate shall induce a reallocation when resizing");
     start = &x[0];
 
-    x.SetSize(3, AlwaysReallocate(), KeepOldValues());
+    x.SetSize(3, DoubleVariableLengthVectorType::AlwaysReallocate(), DoubleVariableLengthVectorType::KeepOldValues());
     ASSERT( ! x.IsAProxy(), "After resizing, it shall never be a proxy");
     ASSERT( ref[0]==x[0] && ref[1]==x[1] && ref[2]==x[2], "Old Values shall have been kept")
     ASSERT(&x[0] != start, "AlwaysReallocate shall induce a reallocation when resizing");
     start = &x[0];
 
-    x.SetSize(3, AlwaysReallocate(), KeepOldValues());
+    x.SetSize(3, DoubleVariableLengthVectorType::AlwaysReallocate(), DoubleVariableLengthVectorType::KeepOldValues());
     ASSERT( ! x.IsAProxy(), "After resizing, it shall never be a proxy");
     ASSERT( ref[0]==x[0] && ref[1]==x[1] && ref[2]==x[2], "Old Values shall have been kept")
     ASSERT(&x[0] != start, "AlwaysReallocate shall induce a reallocation when resizing, even with the same size");
@@ -157,19 +157,19 @@ int itkVariableLengthVectorTest(int, char*[])
 
     // ===[ Don't keep old values
     // ---[ ShrinkToFit
-    x.SetSize(5, ShrinkToFit(), DumpOldValues());
+    x.SetSize(5, DoubleVariableLengthVectorType::ShrinkToFit(), DoubleVariableLengthVectorType::DumpOldValues());
     ASSERT(&x[0] != start, "ShrintToFit(bigger) => reallocate");
     ASSERT( ref[0] != x[0], "Resize + Dump Old Value --> Old values shall be lost");
     x[0] = ref[0];
     start = &x[0];
 
-    x.SetSize(3, ShrinkToFit(), DumpOldValues());
+    x.SetSize(3, DoubleVariableLengthVectorType::ShrinkToFit(), DoubleVariableLengthVectorType::DumpOldValues());
     ASSERT(&x[0] != start, "ShrintToFit(smaller) => reallocate");
     ASSERT( ref[0] != x[0], "Resize + Dump Old Value --> Old values shall be lost");
     x[0] = ref[0];
     start = &x[0];
 
-    x.SetSize(5, DontShrinkToFit(), DumpOldValues());
+    x.SetSize(5, DoubleVariableLengthVectorType::DontShrinkToFit(), DoubleVariableLengthVectorType::DumpOldValues());
     ASSERT(&x[0] != start, "DontShrintToFit(bigger) => reallocate");
     ASSERT( ref[0] != x[0], "Resize + Dump Old Value --> Old values shall be lost");
     x[0] = ref[0];

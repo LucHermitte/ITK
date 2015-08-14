@@ -1,5 +1,5 @@
 set(ITKIOMesh_SRC
-  itkMeshFileReader.cxx
+  itkMeshFileReaderException.cxx
   itkBYUMeshIO.cxx
   itkBYUMeshIOFactory.cxx
   itkFreeSurferAsciiMeshIO.cxx
@@ -19,6 +19,5 @@ set(ITKIOMesh_SRC
 )
 
 add_library(ITKIOMesh ${ITK_LIBRARY_BUILD_TYPE} ${ITKIOMesh_SRC})
-target_link_libraries(ITKIOMesh ${ITKCommon_LIBRARIES} ${ITKGIFTI_LIBRARIES} ${ITKIOImageBase_LIBRARIES})
-
+itk_module_link_dependencies()
 itk_module_target(ITKIOMesh)

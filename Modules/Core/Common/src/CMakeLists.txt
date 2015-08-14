@@ -93,8 +93,11 @@ itkMath.cxx
 
 if(WIN32)
   list(APPEND ITKCommon_SRCS itkWin32OutputWindow.cxx)
-  list(APPEND ITKCommon_SRCS itkWin32OutputWindow.cxx itkWinThreadPool.cxx)
-else()
+endif()
+
+if(ITK_USE_WIN32_THREADS)
+  list(APPEND ITKCommon_SRCS itkWinThreadPool.cxx)
+elseif(ITK_USE_PTHREADS)
   list(APPEND ITKCommon_SRCS itkPThreadPool.cxx)
 endif()
 
@@ -131,15 +134,13 @@ endif()
 ### generating libraries
 add_library( ITKCommon ${ITK_LIBRARY_BUILD_TYPE} ${ITKCommon_SRCS})
 
-target_link_libraries(ITKCommon
-  itksys
-  ITKVNLInstantiation
-  ${ITKDoubleConversion_LIBRARIES})
+itk_module_link_dependencies()
+target_link_libraries(ITKCommon LINK_PUBLIC itksys ITKVNLInstantiation)
 
 if(UNIX)
-  target_link_libraries(ITKCommon ${CMAKE_THREAD_LIBS} -lm)
+  target_link_libraries(ITKCommon LINK_PUBLIC ${CMAKE_THREAD_LIBS} -lm)
   if(ITK_DYNAMIC_LOADING)
-    target_link_libraries(ITKCommon ${CMAKE_DL_LIBS})
+    target_link_libraries(ITKCommon LINK_PUBLIC ${CMAKE_DL_LIBS})
   endif()
 endif()
 

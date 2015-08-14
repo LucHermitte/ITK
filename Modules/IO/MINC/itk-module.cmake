@@ -2,11 +2,11 @@ set(DOCUMENTATION "This module contains classes for reading and writing image
 files in the MINC 2 file Format (mnc) and transformations (xfm).")
 
 itk_module(ITKIOMINC
-  DEPENDS
-    ITKMINC
+  ENABLE_SHARED
+  PRIVATE_DEPENDS
     ITKIOImageBase
+    ITKMINC
     ITKIOTransformBase
-    ITKTransform
   TEST_DEPENDS
     ITKTestKernel
     ITKImageStatistics

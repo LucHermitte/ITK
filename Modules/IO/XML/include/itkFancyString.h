@@ -23,6 +23,7 @@
 #include <vector>
 #include <map>
 #include "itkArray.h"
+#include "itkIOXMLTemplateExport.h"
 
 namespace itk
 {
@@ -41,7 +42,7 @@ namespace itk
  *
  * \ingroup ITKIOXML
  */
-class FancyString : public std::string
+class ITKIOXML_EXPORT_INHERIT_TEMPLATE FancyString : public std::string
 {
 public:
   FancyString();

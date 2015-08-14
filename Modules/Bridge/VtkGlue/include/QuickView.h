@@ -26,11 +26,13 @@
 #include <itkRGBPixel.h>
 #include <itkIntTypes.h>
 
+#include "ITKVtkGlueExport.h"
+
 /** \class ImageInfo
  * \brief A container for an image and its descriptiom
  * \ingroup ITKVtkGlue
  */
-class ImageInfo
+class ITKVtkGlue_EXPORT ImageInfo
 {
 public:
   typedef itk::Image<unsigned char, 2> ImageType;
@@ -49,7 +51,7 @@ public:
  * \brief A container for an rgb image and its descriptiom
  * \ingroup ITKVtkGlue
  */
-class RGBImageInfo
+class ITKVtkGlue_EXPORT RGBImageInfo
 {
 public:
   typedef itk::Image<itk::RGBPixel<unsigned char>, 2> ImageType;
@@ -102,7 +104,7 @@ public:
  *
  * \ingroup ITKVtkGlue
  */
-class QuickView
+class ITKVtkGlue_EXPORT QuickView
 {
 public:
   QuickView()

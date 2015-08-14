@@ -6,6 +6,7 @@ or for performing statistical pattern classification.  Statistics are calculated
 on a Sample, which contains MeasurementVector's.")
 
 itk_module(ITKStatistics
+  ENABLE_SHARED
   DEPENDS
     ITKCommon
     ITKNetlib
@@ -13,6 +14,7 @@ itk_module(ITKStatistics
     ITKTestKernel
     ITKImageIntensity
     ITKImageCompose
+    ITKIOImageBase
   DESCRIPTION
     "${DOCUMENTATION}"
 )

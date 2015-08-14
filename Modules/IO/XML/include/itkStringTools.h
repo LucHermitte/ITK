@@ -22,6 +22,7 @@
 #include <vector>
 #include <map>
 #include "itkArray.h"
+#include "itkIOXMLTemplateExport.h"
 
 namespace itk
 {
@@ -35,7 +36,7 @@ namespace itk
  *
  * \ingroup ITKIOXML
  */
-class StringTools
+class ITKIOXML_EXPORT_INHERIT_TEMPLATE StringTools
 {
 public:
   /////////////////////////////////////////////////////////////////////////////

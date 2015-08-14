@@ -104,7 +104,13 @@ BorderQuadEdgeMeshFilter< TInputMesh, TOutputMesh >::ComputeLongestBorder()
 
   InputMeshConstPointer input = this->GetInput();
 
-  InputEdgeListPointerType list = boundaryRepresentativeEdges->Evaluate(*input);
+  InputEdgeListPointerType list;
+  list.TakeOwnership( boundaryRepresentativeEdges->Evaluate(*input) );
+
+  if( !list || list->empty() )
+    {
+    itkGenericExceptionMacro( << "This filter requires at least one boundary" );
+    }
 
   InputCoordRepType     max_length(0.0), length(0.0);
   InputEdgeListIterator oborder_it = list->begin();
@@ -138,8 +144,6 @@ BorderQuadEdgeMeshFilter< TInputMesh, TOutputMesh >::ComputeLongestBorder()
 
   InputQEType* output = *oborder_it;
 
-  delete list;
-
   return output;
 }
 #endif
@@ -155,7 +159,13 @@ BorderQuadEdgeMeshFilter< TInputMesh, TOutputMesh >::ComputeLargestBorder()
 
   InputMeshConstPointer input = this->GetInput();
 
-  InputEdgeListType *list = boundaryRepresentativeEdges->Evaluate(*input);
+  InputEdgeListPointerType list;
+  list.TakeOwnership( boundaryRepresentativeEdges->Evaluate(*input) );
+
+  if( !list || list->empty() )
+    {
+    itkGenericExceptionMacro( << "This filter requires at least one boundary" );
+    }
 
   SizeValueType max_id = 0L;
   SizeValueType k = 0L;
@@ -183,8 +193,6 @@ BorderQuadEdgeMeshFilter< TInputMesh, TOutputMesh >::ComputeLargestBorder()
     }
 
   InputQEType* output = *oborder_it;
-
-  delete list;
 
   return output;
 }
@@ -366,9 +374,11 @@ BorderQuadEdgeMeshFilter< TInputMesh, TOutputMesh >
     boundaryRepresentativeEdges = BoundaryRepresentativeEdgesType::New();
 
   InputMeshConstPointer input = this->GetInput();
-  InputEdgeListType *   list = boundaryRepresentativeEdges->Evaluate(*input);
 
-  InputQEType *bdryEdge = ( *list->begin() );
+  InputEdgeListPointerType list;
+  list.TakeOwnership( boundaryRepresentativeEdges->Evaluate(*input) );
+
+  InputQEType *bdryEdge = *( list->begin() );
 
   InputPointIdentifier NbBoundaryPt = this->m_BoundaryPtMap.size();
 
@@ -450,8 +460,6 @@ BorderQuadEdgeMeshFilter< TInputMesh, TOutputMesh >
     pt[1] = -this->m_Radius + ( Length[i] - 3.0 * EdgeLength );
     this->m_Border[i++] = pt;
     }
-
-  delete list;
 }
 
 template< typename TInputMesh, typename TOutputMesh >

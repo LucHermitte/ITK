@@ -3022,7 +3022,7 @@ L556:
         if (*gd >= 0.) {
 /*                               the directional derivative >=0. */
 /*                               Line search is impossible. */
-          printf(" ascent direction in projection gd = %lf", *gd );
+          /*printf(" ascent direction in projection gd = %lf", *gd );*/
             *info = -4;
             return 0;
         }
@@ -4001,9 +4001,11 @@ L999:
 /* L55: */
     }
     if (dd_p__ > 0.) {
-        printf(" Positive dir derivative in projection ");
         dcopy_(n, &xp[1], &c__1, &x[1], &c__1);
-        printf(" Using the backtracking step ");
+        if (*iprint > 0) {
+            printf(" Positive dir derivative in projection ");
+            printf(" Using the backtracking step ");
+        }
     } else {
         goto L911;
     }
